@@ -33,7 +33,6 @@ def generar_pdf(titulo, datos, es_detallado=False):
 # --- FUNCIONES DE BASE DE DATOS ---
 @st.cache_data
 def obtener_maestro_productos():
-    """Trae la lista de productos con su orden oficial."""
     res = supabase.table("productos_lista").select("nombre, orden").order("orden").execute()
     return pd.DataFrame(res.data)
 
@@ -74,7 +73,7 @@ else:
     col_suc, col_out = st.columns([0.7, 0.3])
     with col_suc: st.subheader(f"📍 {info['nombre_sucursal']}")
     with col_out:
-        if st.button("Cerrar Sesión", use_container_width=True):
+        if st.button("Salir", use_container_width=True):
             st.session_state.clear()
             st.rerun()
 
@@ -100,9 +99,16 @@ else:
                 c1, c2, c3 = st.columns([3.5, 3.5, 3])
                 with c1: st.write(f"**{prod}**")
                 with c2:
-                    val = st.number_input("n", label_visibility="collapsed", min_value=0.0, step=0.5, 
-                                        value=float(st.session_state.cantidades[prod]), 
-                                        key=f"in_{prod}_{st.session_state.reset_count}")
+                    # Al definir min_value como float y step como 0.5, Streamlit usa input type="number"
+                    # Esto activa el teclado numérico con punto/coma decimal en el móvil
+                    val = st.number_input(
+                        "n", label_visibility="collapsed", 
+                        min_value=0.0, 
+                        step=0.5, 
+                        format="%.1f", # Fuerza el formato numérico
+                        value=float(st.session_state.cantidades[prod]), 
+                        key=f"in_{prod}_{st.session_state.reset_count}"
+                    )
                     st.session_state.cantidades[prod] = val
                 with c3:
                     opcion = st.selectbox("u", ["cajon", "unidad"], key=f"un_{prod}_{st.session_state.reset_count}", label_visibility="collapsed")
@@ -114,7 +120,11 @@ else:
                 for i, extra in enumerate(st.session_state.extras):
                     ce1, ce2, ce3 = st.columns([4, 3, 3])
                     with ce1: st.session_state.extras[i]['nombre'] = st.text_input(f"P {i}", value=extra['nombre'], key=f"ex_n_{i}", label_visibility="collapsed", placeholder="Nombre")
-                    with ce2: st.session_state.extras[i]['cantidad'] = st.number_input(f"C {i}", value=extra['cantidad'], min_value=0.0, step=0.5, key=f"ex_c_{i}", label_visibility="collapsed")
+                    with ce2: 
+                        st.session_state.extras[i]['cantidad'] = st.number_input(
+                            f"C {i}", value=float(extra['cantidad']), min_value=0.0, step=0.5, format="%.1f",
+                            key=f"ex_c_{i}", label_visibility="collapsed"
+                        )
                     with ce3: st.session_state.extras[i]['unidad'] = st.selectbox(f"U {i}", ["cajon", "unidad"], index=0 if extra['unidad']=="cajon" else 1, key=f"ex_u_{i}", label_visibility="collapsed")
                 
                 if st.button("➕ Añadir otro producto"):
@@ -122,22 +132,21 @@ else:
                     st.rerun()
 
             st.divider()
-            if st.button("🚀 ENVIAR PEDIDO COMPLETO", type="primary", use_container_width=True):
+            if st.button("🚀 ENVIAR PEDIDO", type="primary", use_container_width=True):
                 guardar_pedido(info["id"], st.session_state.cantidades, st.session_state.unidades_sel, st.session_state.extras)
                 st.toast("✅ ¡Enviado!")
                 time.sleep(1)
                 st.rerun()
         render_items()
 
+    # --- PESTAÑAS CONSOLIDADO Y HISTORIAL (MANTENIENDO LÓGICA DE ORDEN) ---
     if info["rol"] == "admin":
         with tabs[1]:
             res = supabase.table("pedidos").select("id, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)").eq("estado", "pendiente").execute()
             if res.data:
                 df_p = pd.json_normalize(res.data)
                 df_res = df_p.groupby(['producto', 'unidad_medida'])['cantidad'].sum().reset_index()
-                # Ordenar Consolidado según el maestro
                 df_res = df_res.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values('orden')
-                
                 df_res_final = df_res[['producto', 'unidad_medida', 'cantidad']].rename(columns={'producto': 'Producto', 'unidad_medida': 'Unidad', 'cantidad': 'Total'})
                 st.table(df_res_final)
                 
@@ -157,7 +166,6 @@ else:
         query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
         if info["rol"] != "admin": query = query.eq("usuario_id", info["id"])
         hist = query.order("fecha_pedido", desc=True).limit(500).execute()
-        
         if hist.data:
             df_h = pd.json_normalize(hist.data)
             df_h['fecha_dt'] = pd.to_datetime(df_h['fecha_pedido'])
@@ -165,21 +173,15 @@ else:
                 l = f - timedelta(days=f.weekday()); d = l + timedelta(days=6)
                 return f"Semana del {l.strftime('%d/%m/%y')} al {d.strftime('%d/%m/%y')}"
             df_h['Rango'] = df_h['fecha_dt'].apply(calc_semana)
-            
             for rango in df_h['Rango'].unique():
                 with st.expander(f"📅 {rango}"):
                     df_s = df_h[df_h['Rango'] == rango].copy()
                     df_agrupado = df_s.groupby(['usuarios.nombre_sucursal', 'producto', 'unidad_medida'])['cantidad'].sum().reset_index()
-                    
-                    # Aplicar orden maestro al Historial
                     df_agrupado = df_agrupado.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values(['usuarios.nombre_sucursal', 'orden'])
-                    
                     if info["rol"] == "admin":
                         for suc in df_agrupado['usuarios.nombre_sucursal'].unique():
                             st.markdown(f"📍 **{suc}**")
                             res_suc = df_agrupado[df_agrupado['usuarios.nombre_sucursal'] == suc]
-                            st.dataframe(res_suc[['producto', 'cantidad', 'unidad_medida']].rename(columns={'producto': 'Producto', 'cantidad': 'Total', 'unidad_medida': 'Unidad'}), 
-                                         use_container_width=True, hide_index=True)
+                            st.dataframe(res_suc[['producto', 'cantidad', 'unidad_medida']].rename(columns={'producto': 'Producto', 'cantidad': 'Total', 'unidad_medida': 'Unidad'}), use_container_width=True, hide_index=True)
                     else:
-                        st.dataframe(df_agrupado[['producto', 'cantidad', 'unidad_medida']].rename(columns={'producto': 'Producto', 'cantidad': 'Total', 'unidad_medida': 'Unidad'}), 
-                                     use_container_width=True, hide_index=True)
+                        st.dataframe(df_agrupado[['producto', 'cantidad', 'unidad_medida']].rename(columns={'producto': 'Producto', 'cantidad': 'Total', 'unidad_medida': 'Unidad'}), use_container_width=True, hide_index=True)
