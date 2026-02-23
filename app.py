@@ -10,6 +10,15 @@ URL = "https://gosjojpueocxpyiqhvfr.supabase.co"
 KEY = "sb_publishable_rZUwiJl548Ii1CwaJ87wLw_MA3oJzjT"
 supabase: Client = create_client(URL, KEY)
 
+# --- LÓGICA DE PERSISTENCIA DE SESIÓN ---
+def check_session():
+    """Verifica si hay un usuario guardado en los parámetros de la URL."""
+    if "user_id" in st.query_params and "user_info" not in st.session_state:
+        u_id = st.query_params["user_id"]
+        res = supabase.table("usuarios").select("*").eq("id", u_id).execute()
+        if res.data:
+            st.session_state["user_info"] = res.data[0]
+
 # --- FUNCIÓN PARA GENERAR PDF ---
 def generar_pdf(titulo, datos, es_detallado=False):
     pdf = FPDF()
@@ -55,7 +64,9 @@ def guardar_pedido(usuario_id, dict_pedidos, dict_unidades, lista_extras):
     st.session_state.extras = [] 
     st.session_state.reset_count = st.session_state.get('reset_count', 0) + 1
 
-# --- LOGIN ---
+# --- INICIO DE LA APP ---
+check_session()
+
 if "user_info" not in st.session_state:
     st.title("🥬 Gestión de Verdulerías")
     with st.form("login"):
@@ -65,6 +76,8 @@ if "user_info" not in st.session_state:
             res = supabase.table("usuarios").select("*").eq("username", u).eq("password", p).execute()
             if res.data:
                 st.session_state["user_info"] = res.data[0]
+                # Guardamos el ID en la URL para persistencia al refrescar
+                st.query_params["user_id"] = res.data[0]["id"]
                 st.rerun()
             else: st.error("Acceso denegado")
 
@@ -75,12 +88,14 @@ else:
     with col_out:
         if st.button("Salir", use_container_width=True):
             st.session_state.clear()
+            st.query_params.clear() # Limpiamos la URL al salir
             st.rerun()
 
     st.divider()
     df_maestro = obtener_maestro_productos()
     lista_prod_nombres = df_maestro['nombre'].tolist()
     
+    # Inicialización de estados
     if "cantidades" not in st.session_state:
         st.session_state.cantidades = {p: 0.0 for p in lista_prod_nombres}
     if "unidades_sel" not in st.session_state:
@@ -99,16 +114,9 @@ else:
                 c1, c2, c3 = st.columns([3.5, 3.5, 3])
                 with c1: st.write(f"**{prod}**")
                 with c2:
-                    # Al definir min_value como float y step como 0.5, Streamlit usa input type="number"
-                    # Esto activa el teclado numérico con punto/coma decimal en el móvil
-                    val = st.number_input(
-                        "n", label_visibility="collapsed", 
-                        min_value=0.0, 
-                        step=0.5, 
-                        format="%.1f", # Fuerza el formato numérico
-                        value=float(st.session_state.cantidades[prod]), 
-                        key=f"in_{prod}_{st.session_state.reset_count}"
-                    )
+                    val = st.number_input("n", label_visibility="collapsed", min_value=0.0, step=0.5, format="%.1f",
+                                        value=float(st.session_state.cantidades[prod]), 
+                                        key=f"in_{prod}_{st.session_state.reset_count}")
                     st.session_state.cantidades[prod] = val
                 with c3:
                     opcion = st.selectbox("u", ["cajon", "unidad"], key=f"un_{prod}_{st.session_state.reset_count}", label_visibility="collapsed")
@@ -120,14 +128,10 @@ else:
                 for i, extra in enumerate(st.session_state.extras):
                     ce1, ce2, ce3 = st.columns([4, 3, 3])
                     with ce1: st.session_state.extras[i]['nombre'] = st.text_input(f"P {i}", value=extra['nombre'], key=f"ex_n_{i}", label_visibility="collapsed", placeholder="Nombre")
-                    with ce2: 
-                        st.session_state.extras[i]['cantidad'] = st.number_input(
-                            f"C {i}", value=float(extra['cantidad']), min_value=0.0, step=0.5, format="%.1f",
-                            key=f"ex_c_{i}", label_visibility="collapsed"
-                        )
+                    with ce2: st.session_state.extras[i]['cantidad'] = st.number_input(f"C {i}", value=float(extra['cantidad']), min_value=0.0, step=0.5, format="%.1f", key=f"ex_c_{i}", label_visibility="collapsed")
                     with ce3: st.session_state.extras[i]['unidad'] = st.selectbox(f"U {i}", ["cajon", "unidad"], index=0 if extra['unidad']=="cajon" else 1, key=f"ex_u_{i}", label_visibility="collapsed")
                 
-                if st.button("➕ Añadir otro producto"):
+                if st.button("➕ Añadir otro"):
                     st.session_state.extras.append({'nombre': '', 'cantidad': 0.0, 'unidad': 'cajon'})
                     st.rerun()
 
@@ -139,7 +143,7 @@ else:
                 st.rerun()
         render_items()
 
-    # --- PESTAÑAS CONSOLIDADO Y HISTORIAL (MANTENIENDO LÓGICA DE ORDEN) ---
+    # --- PESTAÑAS CONSOLIDADO Y HISTORIAL (SE MANTIENEN IGUAL) ---
     if info["rol"] == "admin":
         with tabs[1]:
             res = supabase.table("pedidos").select("id, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)").eq("estado", "pendiente").execute()
@@ -158,9 +162,9 @@ else:
                     if st.button("✅ COMPRA REALIZADA", type="primary", use_container_width=True):
                         for pid in df_p['id']:
                             supabase.table("pedidos").update({"estado": "completado"}).eq("id", pid).execute()
-                        st.success("¡Listo!")
+                        st.success("¡Hecho!")
                         st.rerun()
-            else: st.info("Nada pendiente.")
+            else: st.info("Sin pendientes.")
 
     with tabs[-1]:
         query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
@@ -180,8 +184,7 @@ else:
                     df_agrupado = df_agrupado.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values(['usuarios.nombre_sucursal', 'orden'])
                     if info["rol"] == "admin":
                         for suc in df_agrupado['usuarios.nombre_sucursal'].unique():
-                            st.markdown(f"📍 **{suc}**")
-                            res_suc = df_agrupado[df_agrupado['usuarios.nombre_sucursal'] == suc]
-                            st.dataframe(res_suc[['producto', 'cantidad', 'unidad_medida']].rename(columns={'producto': 'Producto', 'cantidad': 'Total', 'unidad_medida': 'Unidad'}), use_container_width=True, hide_index=True)
+                            st.write(f"📍 **{suc}**")
+                            st.dataframe(df_agrupado[df_agrupado['usuarios.nombre_sucursal']==suc][['producto', 'cantidad', 'unidad_medida']], hide_index=True)
                     else:
-                        st.dataframe(df_agrupado[['producto', 'cantidad', 'unidad_medida']].rename(columns={'producto': 'Producto', 'cantidad': 'Total', 'unidad_medida': 'Unidad'}), use_container_width=True, hide_index=True)
+                        st.dataframe(df_agrupado[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
