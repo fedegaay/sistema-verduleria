@@ -40,14 +40,14 @@ def generar_pdf(titulo, datos):
     pdf.cell(190, 10, titulo, ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(90, 10, "Producto", 1)
-    pdf.cell(40, 10, "Cant.", 1)
-    pdf.cell(60, 10, "Unidad", 1, ln=True)
+    pdf.cell(90, 14, "Producto", 1)
+    pdf.cell(40, 14, "Cant.", 1)
+    pdf.cell(60, 14, "Unidad", 1, ln=True)
     pdf.set_font("Arial", "", 12)
     for _, row in datos.iterrows():
-        pdf.cell(90, 10, str(row['Producto']), 1)
-        pdf.cell(40, 10, f"{float(row['Total']):.1f}", 1)
-        pdf.cell(60, 10, str(row['Unidad']), 1, ln=True)
+        pdf.cell(90, 14, str(row['Producto']), 1)
+        pdf.cell(40, 14, f"{float(row['Total']):.1f}", 1)
+        pdf.cell(60, 14, str(row['Unidad']), 1, ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
 def generar_pdf_detallado(titulo, datos):
@@ -56,19 +56,23 @@ def generar_pdf_detallado(titulo, datos):
     pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 10, titulo, ln=True, align="C")
     pdf.ln(10)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(70, 10, "Producto", 1)
-    pdf.cell(60, 10, "Sucursal", 1)
-    pdf.cell(30, 10, "Cant.", 1)
-    pdf.cell(30, 10, "Unidad", 1, ln=True)
-    pdf.set_font("Arial", "", 10)
-    # Ordenar por producto para que sea más fácil de leer
-    datos_sorted = datos.sort_values(by=['producto', 'usuarios.nombre_sucursal'])
-    for _, row in datos_sorted.iterrows():
-        pdf.cell(70, 10, str(row['producto']), 1)
-        pdf.cell(60, 10, str(row['usuarios.nombre_sucursal']), 1)
-        pdf.cell(30, 10, f"{float(row['cantidad']):.1f}", 1)
-        pdf.cell(30, 10, str(row['unidad_medida']), 1, ln=True)
+    
+    sucursales = datos['usuarios.nombre_sucursal'].unique()
+    for sucursal in sucursales:
+        pdf.set_font("Arial", "B", 14)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(190, 12, f"SUCURSAL: {sucursal}", 1, ln=True, fill=True)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(100, 12, "Producto", 1)
+        pdf.cell(45, 12, "Cantidad", 1)
+        pdf.cell(45, 12, "Unidad", 1, ln=True)
+        pdf.set_font("Arial", "", 11)
+        datos_sucursal = datos[datos['usuarios.nombre_sucursal'] == sucursal]
+        for _, row in datos_sucursal.iterrows():
+            pdf.cell(100, 14, str(row['producto']), 1)
+            pdf.cell(45, 14, f"{float(row['cantidad']):.1f}", 1)
+            pdf.cell(45, 14, str(row['unidad_medida']), 1, ln=True)
+        pdf.ln(10)
     return pdf.output(dest='S').encode('latin-1')
 
 # --- FUNCIONES DE MAESTRO DE PRODUCTOS ---
@@ -103,7 +107,7 @@ def guardar_pedido(usuario_id, dict_pedidos, dict_unidades, lista_extras):
                 "cantidad": round(float(extra['cantidad']), 1), "unidad_medida": extra['unidad/es'],
                 "estado": "pendiente"
             }).execute()
-    st.session_state.cantidades = {}
+    st.session_state.cantidades = {k: 0.0 for k in st.session_state.cantidades}
     st.session_state.extras = [] 
     st.session_state.reset_count = st.session_state.get('reset_count', 0) + 1
 
@@ -111,7 +115,7 @@ def guardar_pedido(usuario_id, dict_pedidos, dict_unidades, lista_extras):
 check_session()
 
 if "user_info" not in st.session_state:
-    st.markdown("<h1 style='text-align: center;'>El Rey Verdu <br>📦 Pedidos 📦 </h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>📍 El Rey Verdu 📍<br>Pedidos</h1>", unsafe_allow_html=True)
     with st.form("login"):
         u = st.text_input("Usuario")
         p = st.text_input("Clave", type="password")
@@ -124,6 +128,8 @@ if "user_info" not in st.session_state:
             else: st.error("Acceso denegado")
 else:
     info = st.session_state["user_info"]
+    
+    # Encabezado y botón Cerrar Sesión
     c_suc, c_out = st.columns([0.7, 0.3])
     with c_suc: st.markdown(f"<h3 style='text-align: center;'>📍 {info['nombre_sucursal']} 📍</h3>", unsafe_allow_html=True)
     with c_out:
@@ -132,13 +138,14 @@ else:
             st.query_params.clear()
             st.rerun()
 
+    # Inicialización de estados para evitar AttributeError
     df_maestro = obtener_maestro_productos()
     lista_prod_nombres = df_maestro['nombre'].tolist()
     
     if "cantidades" not in st.session_state: st.session_state.cantidades = {p: 0.0 for p in lista_prod_nombres}
     if "unidades_sel" not in st.session_state: st.session_state.unidades_sel = {p: "cajon/es" for p in lista_prod_nombres}
     if "extras" not in st.session_state: st.session_state.extras = []
-    if "reset_count" not in st.session_state: st.session_count = 0
+    if "reset_count" not in st.session_state: st.session_state.reset_count = 0
 
     menu = ["📝 Cargar Pedido", "📊 Pedido General", "📜 Historial de Compras", "👥 Usuarios", "📦 Listado de Productos"] if info["rol"] == "admin" else ["📝 Cargar", "📜 Historial"]
     tabs = st.tabs(menu)
@@ -176,38 +183,31 @@ else:
 
     if info["rol"] == "admin":
         with tabs[1]:
-            # Traer datos incluyendo la relación con usuarios para el detalle
             res = supabase.table("pedidos").select("id, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)").eq("estado", "pendiente").execute()
             if res.data:
                 df_raw = pd.json_normalize(res.data)
-                
-                # Resumen para tabla y PDF de compra
                 df_res = df_raw.groupby(['producto', 'unidad_medida'])['cantidad'].sum().reset_index()
                 df_res = df_res.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values('orden')
                 df_res_final = df_res[['producto', 'unidad_medida', 'cantidad']].rename(columns={'producto': 'Producto', 'unidad_medida': 'Unidad', 'cantidad': 'Total'})
-                
                 st.dataframe(df_res_final.style.format({"Total": "{:.1f}"}), use_container_width=True, hide_index=True)
                 
-                # Fila de botones de descarga
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
+                c_p1, c_p2 = st.columns(2)
+                with c_p1:
                     pdf_compra = generar_pdf("LISTA DE COMPRA", df_res_final)
                     st.download_button("📄 PDF Compra", data=pdf_compra, file_name="compra_general.pdf", type="primary", use_container_width=True)
-                with col_btn2:
+                with c_p2:
                     pdf_envio = generar_pdf_detallado("DETALLE DE ENVÍOS POR SUCURSAL", df_raw)
-                    st.download_button("🚚 PDF Envío (Detallado)", data=pdf_envio, file_name="detalle_envios.pdf", type="primary", use_container_width=True)
+                    st.download_button("🚚 PDF Envío", data=pdf_envio, file_name="detalle_envios.pdf", type="primary", use_container_width=True)
                 
-                st.write("") # Espacio
-                # Botón de Compra Finalizada debajo
+                st.write("")
                 if st.button("✅ COMPRA FINALIZADA", type="primary", use_container_width=True):
                     for pid in df_raw['id']: supabase.table("pedidos").update({"estado": "completado"}).eq("id", pid).execute()
                     st.success("¡Listo!")
                     st.rerun()
             else: st.info("No hay pedidos pendientes.")
 
-        # Resto de pestañas para Admin (Historial, Usuarios, Catálogo) se mantienen igual...
         with tabs[2]:
-            st.subheader("📜 Historial de Compras (General)")
+            st.subheader("📜 Historial de Compras")
             query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
             hist = query.order("fecha_pedido", desc=True).limit(500).execute()
             if hist.data:
@@ -281,7 +281,6 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
                         st.cache_data.clear(); st.rerun()
     else:
-        # Historial para Sucursal
         with tabs[1]:
             st.subheader("📜 Mi Historial de Pedidos")
             query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
@@ -297,5 +296,4 @@ else:
                     with st.expander(f"📅 {rango}"):
                         df_s = df_h[df_h['Rango'] == rango].copy()
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
-            else:
-                st.info("Aún no has realizado pedidos.")
+            else: st.info("Aún no has realizado pedidos.")
