@@ -10,36 +10,6 @@ URL = "https://gosjojpueocxpyiqhvfr.supabase.co"
 KEY = "sb_publishable_rZUwiJl548Ii1CwaJ87wLw_MA3oJzjT"
 supabase: Client = create_client(URL, KEY)
 
-# --- ESTILOS PARA INTEGRAR EL HEADER Y FONDO ---
-st.markdown("""
-    <style>
-    /* Fondo de la aplicación principal */
-    .stApp {
-        background-color: #FFF9E3;
-    }
-
-    /* Fondo del Header (la franja blanca de arriba) */
-    header[data-testid="stHeader"] {
-        background-color: #FFF9E3 !important;
-    }
-
-    /* Fondo de la barra de herramientas superior derecha */
-    .stAppHeader {
-        background-color: #FFF9E3 !important;
-    }
-
-    /* Eliminar anclas de títulos y reducir espacios */
-    h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
-        display: none !important;
-    }
-    
-    /* Opcional: Pegar un poco más el contenido arriba */
-    .block-container {
-        padding-top: 3rem !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 # --- LÓGICA DE PERSISTENCIA DE SESIÓN ---
 def check_session():
     if "user_id" in st.query_params and "user_info" not in st.session_state:
@@ -277,4 +247,5 @@ else:
                 with col4:
                     if st.button("Eliminar", key=f"x_{row['id']}", use_container_width=True):
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
+
                         st.cache_data.clear(); st.rerun()
