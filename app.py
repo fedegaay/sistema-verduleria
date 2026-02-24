@@ -101,7 +101,7 @@ if "user_info" not in st.session_state:
     with st.form("login"):
         u = st.text_input("Usuario")
         p = st.text_input("Clave", type="password")
-        if st.form_submit_button("Entrar"):
+        if st.form_submit_button("Iniciar Sesion" type="primary", use_container_width=True):
             res = supabase.table("usuarios").select("*").eq("username", u).eq("password", p).execute()
             if res.data:
                 st.session_state["user_info"] = res.data[0]
@@ -268,6 +268,7 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
 
 
