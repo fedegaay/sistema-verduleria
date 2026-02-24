@@ -198,12 +198,12 @@ else:
                     with c1:
                         st.write(f"**{user['nombre_sucursal']}** ({user['username']})")
                     with c2:
-                        if st.button("Editar", key=f"ed_u_{user['id']}", use_container_width=True):
+                        if st.button("Editar", key=f"ed_u_{user['id']}",  type="primary", use_container_width=True):
                             st.session_state[f"edit_u_{user['id']}"] = True
                     with c3:
                         # Protección Admin: Solo mostramos eliminar si NO es admin
                         if user['rol'] != 'admin':
-                            if st.button("Eliminar", key=f"del_u_{user['id']}", use_container_width=True, type="secondary"):
+                            if st.button("Eliminar", key=f"del_u_{user['id']}",  type="primary", use_container_width=True):
                                 supabase.table("usuarios").delete().eq("id", user['id']).execute()
                                 st.rerun()
                     
@@ -245,10 +245,11 @@ else:
                 with col3:
                     if st.button("🔽", key=f"down_{row['id']}"): reordenar_producto(row['id'], row['orden'], "down", df_maestro); st.rerun()
                 with col4:
-                    if st.button("Eliminar", key=f"x_{row['id']}", use_container_width=True):
+                    if st.button("Eliminar", key=f"x_{row['id']}", type="primary", use_container_width=True):
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
 
 
