@@ -63,15 +63,15 @@ def generar_pdf_detallado(titulo, datos):
         pdf.set_fill_color(240, 240, 240)
         pdf.cell(190, 12, f"SUCURSAL: {sucursal}", 1, ln=True, fill=True)
         pdf.set_font("Arial", "B", 10)
-        pdf.cell(100, 8, "Producto", 1)
-        pdf.cell(45, 8, "Cantidad", 1)
-        pdf.cell(45, 8, "Unidad", 1, ln=True)
+        pdf.cell(100, 10, "Producto", 1)
+        pdf.cell(45, 10, "Cantidad", 1)
+        pdf.cell(45, 10, "Unidad", 1, ln=True)
         pdf.set_font("Arial", "", 11)
         datos_sucursal = datos[datos['usuarios.nombre_sucursal'] == sucursal]
         for _, row in datos_sucursal.iterrows():
-            pdf.cell(100, 8, str(row['producto']), 1)
-            pdf.cell(45, 8, f"{float(row['cantidad']):.1f}", 1)
-            pdf.cell(45, 8, str(row['unidad_medida']), 1, ln=True)
+            pdf.cell(100, 10, str(row['producto']), 1)
+            pdf.cell(45, 10, f"{float(row['cantidad']):.1f}", 1)
+            pdf.cell(45, 10, str(row['unidad_medida']), 1, ln=True)
         pdf.ln(10)
     return pdf.output(dest='S').encode('latin-1')
 
@@ -297,4 +297,5 @@ else:
                         df_s = df_h[df_h['Rango'] == rango].copy()
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else: st.info("Aún no has realizado pedidos.")
+
 
