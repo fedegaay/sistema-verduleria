@@ -10,6 +10,25 @@ URL = "https://gosjojpueocxpyiqhvfr.supabase.co"
 KEY = "sb_publishable_rZUwiJl548Ii1CwaJ87wLw_MA3oJzjT"
 supabase: Client = create_client(URL, KEY)
 
+# --- ELIMINAR ANCLAS DE LOS TÍTULOS ---
+st.markdown("""
+    <style>
+    /* Oculta el ícono de cadena/link al lado de los títulos */
+    .viewerBadge_link__1S137, .main .element-container a {
+        display: none;
+    }
+    /* Específicamente para los headers de Streamlit */
+    button[data-baseweb="tab"] > div > span > a, 
+    h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
+        display: none !important;
+    }
+    /* Quita el subrayado y efecto hover que genera el link */
+    h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a {
+        visibility: hidden !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- LÓGICA DE PERSISTENCIA DE SESIÓN ---
 def check_session():
     if "user_id" in st.query_params and "user_info" not in st.session_state:
@@ -249,6 +268,7 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
 
 
