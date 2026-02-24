@@ -50,7 +50,7 @@ def generar_pdf(titulo, datos, es_detallado=False):
         pdf.cell(90, 10, "Producto", 1)
         pdf.cell(40, 10, "Cant.", 1)
         pdf.cell(60, 10, "Unidad", 1, ln=True)
-        pdf.set_font("Arial", "", 10)
+        pdf.set_font("Arial", "", 12)
         for _, row in datos.iterrows():
             pdf.cell(90, 10, str(row['Producto']), 1)
             pdf.cell(40, 10, f"{float(row['Total']):.1f}", 1)
@@ -98,7 +98,7 @@ def guardar_pedido(usuario_id, dict_pedidos, dict_unidades, lista_extras):
 check_session()
 
 if "user_info" not in st.session_state:
-    st.title("El Rey Verdu - Pedidos")
+    st.markdown("<h1 style='text-align: center;'>El Rey Verdu - Pedidos</h1>", unsafe_allow_html=True)
     with st.form("login"):
         u = st.text_input("Usuario")
         p = st.text_input("Clave", type="password")
@@ -276,6 +276,7 @@ else:
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else:
                 st.info("Aún no has realizado pedidos.")
+
 
 
 
