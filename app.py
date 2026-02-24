@@ -18,13 +18,6 @@ st.markdown("""
         display: none;
     }
 
-    ._container_gzau3_1  {
-        display: none;
-        bottom: -3000px;
-        right: -3000px;
-    }
-    
-    
     /* Específicamente para los headers de Streamlit */
     button[data-baseweb="tab"] > div > span > a, 
     h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
@@ -283,6 +276,7 @@ else:
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else:
                 st.info("Aún no has realizado pedidos.")
+
 
 
 
