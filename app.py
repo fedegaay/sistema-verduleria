@@ -54,7 +54,7 @@ def generar_pdf(titulo, datos, es_detallado=False):
         pdf.cell(90, 10, "Producto", 1)
         pdf.cell(40, 10, "Cant.", 1)
         pdf.cell(60, 10, "Unidad", 1, ln=True)
-        pdf.set_font("Arial", "", 12)
+        pdf.set_font("Arial", "", 10)
         for _, row in datos.iterrows():
             pdf.cell(90, 10, str(row['Producto']), 1)
             pdf.cell(40, 10, f"{float(row['Total']):.1f}", 1)
@@ -152,7 +152,7 @@ else:
                     ce1, ce2, ce3 = st.columns([4, 3, 3])
                     with ce1: st.session_state.extras[i]['nombre'] = st.text_input(f"P{i}", value=extra['nombre'], key=f"ex_n_{i}", label_visibility="collapsed", placeholder="Producto")
                     with ce2: st.session_state.extras[i]['cantidad'] = st.number_input(f"C{i}", value=float(extra['cantidad']), min_value=0.0, step=0.5, format="%.1f", key=f"ex_c_{i}", label_visibility="collapsed")
-                    with ce3: st.session_state.extras[i]['unidad'] = st.selectbox(f"U{i}", ["cajon", "unidad"], index=0 if extra['unidad']=="cajon" else 1, key=f"ex_u_{i}", label_visibility="collapsed")
+                    with ce3: st.session_state.extras[i]['unidad'] = st.selectbox(f"U{i}", ["cajon/es", "unidad/es"], index=0 if extra['unidad']=="cajon" else 1, key=f"ex_u_{i}", label_visibility="collapsed")
                 if st.button("➕ Añadir nuevo producto"):
                     st.session_state.extras.append({'nombre': '', 'cantidad': 0.0, 'unidad': 'cajon'})
                     st.rerun()
@@ -273,6 +273,7 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
 
 
