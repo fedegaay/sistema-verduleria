@@ -6,52 +6,31 @@ from datetime import timedelta, datetime
 from fpdf import FPDF
 
 # --- CONFIGURACIÓN DE CONEXIÓN ---
-# Se mantiene tu URL y Key actual
 URL = "https://gosjojpueocxpyiqhvfr.supabase.co"
 KEY = "sb_publishable_rZUwiJl548Ii1CwaJ87wLw_MA3oJzjT"
 supabase: Client = create_client(URL, KEY)
 
-# --- ESTILOS PERSONALIZADOS (FONDO, CENTRADO Y BOTONES) ---
+# --- ELIMINAR ANCLAS DE LOS TÍTULOS ---
 st.markdown("""
     <style>
-    /* Fondo total de la App incluyendo el header nativo */
-    .stApp, header[data-testid="stHeader"], .stAppHeader {
-        background-color: #FFF9E3 !important;
+    /* OCULTAR MENÚ SUPERIOR (Deploy, Stop, Fork, etc.) */
+    header[data-testid="stHeader"] {
+        visibility: hidden;
+        height: 0px;
     }
-
-    /* Ocultar elementos de Streamlit (Toolbar y Footer) */
-    header[data-testid="stHeader"] { visibility: hidden; height: 0px; }
-    footer { visibility: hidden; }
-    #MainMenu { visibility: hidden; }
-
-    /* Eliminar anclas de títulos */
-    h1 a, h2 a, h3 a, h4 a, h5 a, h6 a { display: none !important; }
-    
-    /* Centrar textos de subheader nativos */
-    .stSubheader { text-align: center; }
-
-    /* Estilo de Botones por Texto */
-    div.stButton > button:first-child:contains("Cerrar Sesion"),
-    div.stButton > button:first-child:contains("Eliminar") {
-        background-color: #dc3545 !important;
-        color: white !important;
-        border: none !important;
+    /* Oculta el ícono de cadena/link al lado de los títulos */
+    .viewerBadge_link__1S137, .main .element-container a {
+        display: none;
     }
-    
-    div.stButton > button:first-child:contains("Editar") {
-        background-color: #007bff !important;
-        color: white !important;
-        border: none !important;
+    /* Específicamente para los headers de Streamlit */
+    button[data-baseweb="tab"] > div > span > a, 
+    h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
+        display: none !important;
     }
-    
-    div.stButton > button:first-child:contains("ENVIAR") {
-        background-color: #28a745 !important;
-        color: white !important;
-        border: none !important;
+    /* Quita el subrayado y efecto hover que genera el link */
+    h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a {
+        visibility: hidden !important;
     }
-
-    /* Ajuste de espaciado superior */
-    .block-container { padding-top: 1rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -119,7 +98,7 @@ def guardar_pedido(usuario_id, dict_pedidos, dict_unidades, lista_extras):
     st.session_state.extras = [] 
     st.session_state.reset_count = st.session_state.get('reset_count', 0) + 1
 
-# --- FLUJO ---
+# --- INICIO ---
 check_session()
 
 if "user_info" not in st.session_state:
@@ -136,15 +115,10 @@ if "user_info" not in st.session_state:
             else: st.error("Acceso denegado")
 else:
     info = st.session_state["user_info"]
-    
-    # Encabezado Centrado
-    izq, centro, der = st.columns([1, 2, 1])
-    with centro:
-        st.subheader(f"📍 {info['nombre_sucursal']}")
-    
-    c1, c2, c3 = st.columns([1.5, 1, 1.5])
-    with c2:
-        if st.button("Cerrar Sesion", use_container_width=True):
+    c_suc, c_out = st.columns([0.7, 0.3])
+    with c_suc: st.subheader(f"📍 {info['nombre_sucursal']}")
+    with c_out:
+        if st.button("Cerrar Sesion", type="primary", use_container_width=True):
             st.session_state.clear()
             st.query_params.clear()
             st.rerun()
@@ -157,14 +131,10 @@ else:
     if "extras" not in st.session_state: st.session_state.extras = []
     if "reset_count" not in st.session_state: st.session_state.reset_count = 0
 
-    if info["rol"] == "admin":
-        menu = ["📝 Cargar Pedido", "📊 Pedido General", "📜 Historial de Compras", "👥 Usuarios", "📦 Listado de Productos"]
-    else:
-        menu = ["📝 Cargar", "📜 Historial"]
-    
+    menu = ["📝 Cargar Pedido", "📊 Pedido General", "📜 Historial de Compras", "👥 Usuarios", "📦 Listado de Productos"] if info["rol"] == "admin" else ["📝 Cargar", "📜 Historial"]
     tabs = st.tabs(menu)
 
-    # --- PESTAÑA 0: CARGAR ---
+    # --- PESTAÑA 0: CARGA ---
     with tabs[0]:
         @st.fragment
         def render_items():
@@ -196,7 +166,7 @@ else:
                 st.rerun()
         render_items()
 
-    # --- LÓGICA DINÁMICA DE PESTAÑAS (SOLUCIÓN INDEXERROR) ---
+    # --- SOLUCIÓN AL ERROR DE PESTAÑAS ---
     if info["rol"] == "admin":
         with tabs[1]:
             res = supabase.table("pedidos").select("id, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)").eq("estado", "pendiente").execute()
@@ -213,6 +183,7 @@ else:
                 with c_p2:
                     if st.button("✅ COMPRA FINALIZADA", type="primary", use_container_width=True):
                         for pid in df_p['id']: supabase.table("pedidos").update({"estado": "completado"}).eq("id", pid).execute()
+                        st.success("¡Listo!")
                         st.rerun()
             else: st.info("No hay pedidos pendientes.")
 
@@ -248,10 +219,10 @@ else:
                 c1, c2, c3 = st.columns([6, 2, 2])
                 with c1: st.write(f"**{user['nombre_sucursal']}** ({user['username']})")
                 with c2:
-                    if st.button("Editar", key=f"ed_u_{user['id']}", use_container_width=True): st.session_state[f"edit_u_{user['id']}"] = True
+                    if st.button("Editar", key=f"ed_u_{user['id']}", type="primary", use_container_width=True): st.session_state[f"edit_u_{user['id']}"] = True
                 with c3:
                     if user['rol'] != 'admin':
-                        if st.button("Eliminar", key=f"del_u_{user['id']}", use_container_width=True):
+                        if st.button("Eliminar", key=f"del_u_{user['id']}", type="primary", use_container_width=True):
                             supabase.table("usuarios").delete().eq("id", user['id']).execute()
                             st.rerun()
                 if st.session_state.get(f"edit_u_{user['id']}", False):
@@ -287,11 +258,11 @@ else:
                 with col3:
                     if st.button("🔽", key=f"down_{row['id']}"): reordenar_producto(row['id'], row['orden'], "down", df_maestro); st.rerun()
                 with col4:
-                    if st.button("Eliminar", key=f"x_{row['id']}", use_container_width=True):
+                    if st.button("Eliminar", key=f"x_{row['id']}", type="primary", use_container_width=True):
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
                         st.cache_data.clear(); st.rerun()
     else:
-        # Pestaña Historial para Sucursal (Índice 1)
+        # Aquí el historial para la Sucursal (es su segunda pestaña, índice 1)
         with tabs[1]:
             st.subheader("📜 Mi Historial de Pedidos")
             query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
