@@ -10,6 +10,36 @@ URL = "https://gosjojpueocxpyiqhvfr.supabase.co"
 KEY = "sb_publishable_rZUwiJl548Ii1CwaJ87wLw_MA3oJzjT"
 supabase: Client = create_client(URL, KEY)
 
+# --- ESTILOS PARA INTEGRAR EL HEADER Y FONDO ---
+st.markdown("""
+    <style>
+    /* Fondo de la aplicación principal */
+    .stApp {
+        background-color: #FFF9E3;
+    }
+
+    /* Fondo del Header (la franja blanca de arriba) */
+    header[data-testid="stHeader"] {
+        background-color: #FFF9E3 !important;
+    }
+
+    /* Fondo de la barra de herramientas superior derecha */
+    .stAppHeader {
+        background-color: #FFF9E3 !important;
+    }
+
+    /* Eliminar anclas de títulos y reducir espacios */
+    h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
+        display: none !important;
+    }
+    
+    /* Opcional: Pegar un poco más el contenido arriba */
+    .block-container {
+        padding-top: 3rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- LÓGICA DE PERSISTENCIA DE SESIÓN ---
 def check_session():
     if "user_id" in st.query_params and "user_info" not in st.session_state:
@@ -51,7 +81,6 @@ def reordenar_producto(prod_id, orden_actual, direccion, df_completo):
         return
     idx_target = df_completo.index[df_completo['orden'] == target_index][0]
     target_id = df_completo.iloc[idx_target]['id']
-    
     supabase.table("productos_lista").update({"orden": target_index}).eq("id", prod_id).execute()
     supabase.table("productos_lista").update({"orden": orden_actual}).eq("id", target_id).execute()
     st.cache_data.clear()
@@ -75,11 +104,11 @@ def guardar_pedido(usuario_id, dict_pedidos, dict_unidades, lista_extras):
     st.session_state.extras = [] 
     st.session_state.reset_count = st.session_state.get('reset_count', 0) + 1
 
-# --- FLUJO ---
+# --- INICIO ---
 check_session()
 
 if "user_info" not in st.session_state:
-    st.title("🥬 Gestión de Verdulerías")
+    st.title("El Rey Verdu - Pedidos")
     with st.form("login"):
         u = st.text_input("Usuario")
         p = st.text_input("Clave", type="password")
@@ -95,7 +124,7 @@ else:
     c_suc, c_out = st.columns([0.7, 0.3])
     with c_suc: st.subheader(f"📍 {info['nombre_sucursal']}")
     with c_out:
-        if st.button("Salir", use_container_width=True):
+        if st.button("Cerrar Sesion", use_container_width=True):
             st.session_state.clear()
             st.query_params.clear()
             st.rerun()
@@ -108,10 +137,10 @@ else:
     if "extras" not in st.session_state: st.session_state.extras = []
     if "reset_count" not in st.session_state: st.session_state.reset_count = 0
 
-    menu = ["📝 Cargar", "📊 Consolidado", "📜 Historial", "👥 Usuarios", "📦 Catálogo"] if info["rol"] == "admin" else ["📝 Cargar", "📜 Historial"]
+    menu = ["📝 Cargar Pedido", "📊 Pedido General", "📜 Historial de Compras", "👥 Usuarios", "📦 Listado de Productos"] if info["rol"] == "admin" else ["📝 Cargar", "📜 Historial"]
     tabs = st.tabs(menu)
 
-    # --- PESTAÑA CARGA ---
+    # --- PESTAÑAS (CARGA, CONSOLIDADO, HISTORIAL) SE MANTIENEN IGUAL ---
     with tabs[0]:
         @st.fragment
         def render_items():
@@ -119,30 +148,20 @@ else:
                 c1, c2, c3 = st.columns([4, 3, 3])
                 with c1: st.write(f"**{prod}**")
                 with c2:
-                    st.session_state.cantidades[prod] = st.number_input(
-                        "n", label_visibility="collapsed", min_value=0.0, step=0.5, format="%.1f",
-                        value=float(st.session_state.cantidades.get(prod, 0.0)), 
-                        key=f"in_{prod}_{st.session_state.reset_count}"
-                    )
+                    st.session_state.cantidades[prod] = st.number_input("n", label_visibility="collapsed", min_value=0.0, step=0.5, format="%.1f", value=float(st.session_state.cantidades.get(prod, 0.0)), key=f"in_{prod}_{st.session_state.reset_count}")
                 with c3:
-                    st.session_state.unidades_sel[prod] = st.selectbox(
-                        "u", ["cajon", "unidad"], label_visibility="collapsed",
-                        key=f"un_{prod}_{st.session_state.reset_count}"
-                    )
-
+                    st.session_state.unidades_sel[prod] = st.selectbox("u", ["cajon", "unidad"], label_visibility="collapsed", key=f"un_{prod}_{st.session_state.reset_count}")
             if info["rol"] == "admin":
                 st.divider()
-                st.write("✨ **Oportunidades**")
+                st.write("✨ **Prodcutos Adicionales**")
                 for i, extra in enumerate(st.session_state.extras):
                     ce1, ce2, ce3 = st.columns([4, 3, 3])
                     with ce1: st.session_state.extras[i]['nombre'] = st.text_input(f"P{i}", value=extra['nombre'], key=f"ex_n_{i}", label_visibility="collapsed", placeholder="Producto")
                     with ce2: st.session_state.extras[i]['cantidad'] = st.number_input(f"C{i}", value=float(extra['cantidad']), min_value=0.0, step=0.5, format="%.1f", key=f"ex_c_{i}", label_visibility="collapsed")
                     with ce3: st.session_state.extras[i]['unidad'] = st.selectbox(f"U{i}", ["cajon", "unidad"], index=0 if extra['unidad']=="cajon" else 1, key=f"ex_u_{i}", label_visibility="collapsed")
-                
-                if st.button("➕ Añadir otro"):
+                if st.button("➕ Añadir nuevo producto"):
                     st.session_state.extras.append({'nombre': '', 'cantidad': 0.0, 'unidad': 'cajon'})
                     st.rerun()
-
             st.divider()
             if st.button("🚀 ENVIAR PEDIDO COMPLETO", type="primary", use_container_width=True):
                 guardar_pedido(info["id"], st.session_state.cantidades, st.session_state.unidades_sel, st.session_state.extras)
@@ -151,7 +170,6 @@ else:
                 st.rerun()
         render_items()
 
-    # --- PESTAÑA CONSOLIDADO ---
     if info["rol"] == "admin":
         with tabs[1]:
             res = supabase.table("pedidos").select("id, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)").eq("estado", "pendiente").execute()
@@ -161,7 +179,6 @@ else:
                 df_res = df_res.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values('orden')
                 df_res_final = df_res[['producto', 'unidad_medida', 'cantidad']].rename(columns={'producto': 'Producto', 'unidad_medida': 'Unidad', 'cantidad': 'Total'})
                 st.dataframe(df_res_final.style.format({"Total": "{:.1f}"}), use_container_width=True, hide_index=True)
-                
                 c_p1, c_p2 = st.columns(2)
                 with c_p1:
                     pdf_c = generar_pdf("LISTA DE COMPRA", df_res_final)
@@ -173,7 +190,6 @@ else:
                         st.rerun()
             else: st.info("No hay pedidos pendientes.")
 
-    # --- PESTAÑA HISTORIAL ---
     with tabs[2]:
         query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
         if info["rol"] != "admin": query = query.eq("usuario_id", info["id"])
@@ -192,53 +208,73 @@ else:
                     df_agrupado = df_agrupado.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values(['usuarios.nombre_sucursal', 'orden'])
                     st.dataframe(df_agrupado[['usuarios.nombre_sucursal', 'producto', 'cantidad', 'unidad_medida']], hide_index=True)
 
-    # --- PESTAÑA USUARIOS ---
+    # --- PESTAÑA USUARIOS (REDISEÑO COMPACTO) ---
     if info["rol"] == "admin":
         with tabs[3]:
-            st.subheader("Cuentas")
-            with st.expander("➕ Nueva Sucursal"):
+            st.subheader("Gestión de Cuentas")
+            with st.expander("➕ Agregar Nueva Sucursal"):
                 with st.form("ns"):
-                    nu, np, ns = st.text_input("Login"), st.text_input("Clave"), st.text_input("Nombre Sucursal")
+                    nu, np, ns = st.text_input("Usuario (Login)"), st.text_input("Contraseña"), st.text_input("Nombre de la Sucursal")
                     if st.form_submit_button("Crear"):
                         supabase.table("usuarios").insert({"username": nu, "password": np, "nombre_sucursal": ns, "rol": "sucursal"}).execute()
                         st.rerun()
-            res_u = supabase.table("usuarios").select("*").execute()
-            for u in res_u.data:
-                c1, c2, c3, c4 = st.columns([5, 2, 2, 1])
-                with c1: st.write(f"**{u['username']}** ({u['nombre_sucursal']})")
-                with c2: 
-                    if st.button("Ed", key=f"ed_u_{u['id']}"): st.session_state[f"edit_u_{u['id']}"] = True
-                with c3:
-                    if u['rol'] != 'admin' and st.button("🗑️", key=f"del_u_{u['id']}"):
-                        supabase.table("usuarios").delete().eq("id", u['id']).execute()
-                        st.rerun()
 
-    # --- PESTAÑA CATÁLOGO (SOLUCIÓN AL ERROR DE CLAVE) ---
+            st.divider()
+            res_u = supabase.table("usuarios").select("*").execute()
+            if res_u.data:
+                for user in res_u.data:
+                    # Una fila por usuario
+                    c1, c2, c3 = st.columns([6, 2, 2])
+                    with c1:
+                        st.write(f"**{user['nombre_sucursal']}** ({user['username']})")
+                    with c2:
+                        if st.button("Editar", key=f"ed_u_{user['id']}", use_container_width=True):
+                            st.session_state[f"edit_u_{user['id']}"] = True
+                    with c3:
+                        # Protección Admin: Solo mostramos eliminar si NO es admin
+                        if user['rol'] != 'admin':
+                            if st.button("Eliminar", key=f"del_u_{user['id']}", use_container_width=True, type="secondary"):
+                                supabase.table("usuarios").delete().eq("id", user['id']).execute()
+                                st.rerun()
+                    
+                    # Formulario de edición
+                    if st.session_state.get(f"edit_u_{user['id']}", False):
+                        with st.form(f"f_ed_u_{user['id']}"):
+                            ed_u = st.text_input("Usuario", value=user['username'])
+                            ed_p = st.text_input("Clave", value=user['password'])
+                            ed_s = st.text_input("Nombre de Sucursal", value=user['nombre_sucursal'])
+                            # El rol no se puede cambiar aquí para evitar que se cree otro admin
+                            col_f1, col_f2 = st.columns(2)
+                            with col_f1:
+                                if st.form_submit_button("Guardar"):
+                                    supabase.table("usuarios").update({"username": ed_u, "password": ed_p, "nombre_sucursal": ed_s}).eq("id", user['id']).execute()
+                                    del st.session_state[f"edit_u_{user['id']}"]
+                                    st.rerun()
+                            with col_f2:
+                                if st.form_submit_button("Cancelar"):
+                                    del st.session_state[f"edit_u_{user['id']}"]
+                                    st.rerun()
+                    st.write("") # Espaciado mínimo
+
+    # --- PESTAÑA CATÁLOGO ---
     if info["rol"] == "admin":
         with tabs[4]:
-            st.subheader("Orden del Catálogo")
+            st.subheader("Catálogo")
             with st.form("np"):
                 n_p = st.text_input("Nombre de nueva fruta/verdura")
-                if st.form_submit_button("Agregar"):
+                if st.form_submit_button("Agregar producto"):
                     if n_p:
                         supabase.table("productos_lista").insert({"nombre": n_p.strip().capitalize(), "orden": len(df_maestro)}).execute()
                         st.cache_data.clear(); st.rerun()
-            
+            st.divider()
             for i, row in df_maestro.iterrows():
-                col1, col2, col3, col4 = st.columns([5, 1.5, 1.5, 1.5])
+                col1, col2, col3, col4 = st.columns([5, 1.5, 1.5, 2])
                 with col1: st.write(f"**{row['nombre']}**")
                 with col2:
-                    # CLAVE CORREGIDA: up_ en lugar de u_
-                    if st.button("🔼", key=f"up_{row['id']}"): 
-                        reordenar_producto(row['id'], row['orden'], "up", df_maestro)
-                        st.rerun()
+                    if st.button("🔼", key=f"up_{row['id']}"): reordenar_producto(row['id'], row['orden'], "up", df_maestro); st.rerun()
                 with col3:
-                    # CLAVE CORREGIDA: down_ en lugar de d_
-                    if st.button("🔽", key=f"down_{row['id']}"): 
-                        reordenar_producto(row['id'], row['orden'], "down", df_maestro)
-                        st.rerun()
+                    if st.button("🔽", key=f"down_{row['id']}"): reordenar_producto(row['id'], row['orden'], "down", df_maestro); st.rerun()
                 with col4:
-                    # CLAVE CORREGIDA: x_ en lugar de d_
-                    if st.button("🗑️", key=f"x_{row['id']}"):
+                    if st.button("Eliminar", key=f"x_{row['id']}", use_container_width=True):
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
                         st.cache_data.clear(); st.rerun()
