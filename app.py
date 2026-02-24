@@ -19,7 +19,7 @@ st.markdown("""
         height: 0px;
     }
     /* OCULTAR PIE DE PÁGINA (Hecho con Streamlit / GitHub) */
-    ._profilePreview_gzau3_63 {
+    ._container_gzau3_1 {
         visibility: hidden;
         height: 0px;
     }
@@ -278,6 +278,7 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
 
 
