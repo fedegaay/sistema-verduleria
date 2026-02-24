@@ -94,7 +94,7 @@ else:
     c_suc, c_out = st.columns([0.7, 0.3])
     with c_suc: st.subheader(f"📍 {info['nombre_sucursal']}")
     with c_out:
-        if st.button("Cerrar Sesion", use_container_width=True):
+        if st.button("Cerrar Sesion", type="primary", use_container_width=True):
             st.session_state.clear()
             st.query_params.clear()
             st.rerun()
@@ -249,6 +249,7 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
 
 
