@@ -133,7 +133,7 @@ else:
                     st.session_state.extras.append({'nombre': '', 'cantidad': 0.0, 'unidad': 'cajon'})
                     st.rerun()
             st.divider()
-            if st.button("🚀 ENVIAR PEDIDO COMPLETO", type="primary", use_container_width=True):
+            if st.button("🚀 ENVIAR PEDIDO", type="primary", use_container_width=True):
                 guardar_pedido(info["id"], st.session_state.cantidades, st.session_state.unidades_sel, st.session_state.extras)
                 st.toast("✅ ¡Registrado!")
                 time.sleep(1)
@@ -249,3 +249,4 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
