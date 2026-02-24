@@ -13,17 +13,11 @@ supabase: Client = create_client(URL, KEY)
 # --- ELIMINAR ANCLAS DE LOS TÍTULOS ---
 st.markdown("""
     <style>
-    /* Oculta el ícono de cadena/link al lado de los títulos */
-    .stToolbarActionButton {
-        display: none;
-    }
-
-    /* Específicamente para los headers de Streamlit */
+    .stToolbarActionButton { display: none; }
     button[data-baseweb="tab"] > div > span > a, 
     h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
         display: none !important;
     }
-    /* Quita el subrayado y efecto hover que genera el link */
     h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a {
         visibility: hidden !important;
     }
@@ -38,23 +32,43 @@ def check_session():
         if res.data:
             st.session_state["user_info"] = res.data[0]
 
-# --- FUNCIÓN PARA GENERAR PDF ---
-def generar_pdf(titulo, datos, es_detallado=False):
+# --- FUNCIONES PARA GENERAR PDF ---
+def generar_pdf(titulo, datos):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 10, titulo, ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", "B", 12)
-    if not es_detallado:
-        pdf.cell(90, 10, "Producto", 1)
-        pdf.cell(40, 10, "Cant.", 1)
-        pdf.cell(60, 10, "Unidad", 1, ln=True)
-        pdf.set_font("Arial", "", 12)
-        for _, row in datos.iterrows():
-            pdf.cell(90, 10, str(row['Producto']), 1)
-            pdf.cell(40, 10, f"{float(row['Total']):.1f}", 1)
-            pdf.cell(60, 10, str(row['Unidad']), 1, ln=True)
+    pdf.cell(90, 10, "Producto", 1)
+    pdf.cell(40, 10, "Cant.", 1)
+    pdf.cell(60, 10, "Unidad", 1, ln=True)
+    pdf.set_font("Arial", "", 12)
+    for _, row in datos.iterrows():
+        pdf.cell(90, 10, str(row['Producto']), 1)
+        pdf.cell(40, 10, f"{float(row['Total']):.1f}", 1)
+        pdf.cell(60, 10, str(row['Unidad']), 1, ln=True)
+    return pdf.output(dest='S').encode('latin-1')
+
+def generar_pdf_detallado(titulo, datos):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, titulo, ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(70, 10, "Producto", 1)
+    pdf.cell(60, 10, "Sucursal", 1)
+    pdf.cell(30, 10, "Cant.", 1)
+    pdf.cell(30, 10, "Unidad", 1, ln=True)
+    pdf.set_font("Arial", "", 10)
+    # Ordenar por producto para que sea más fácil de leer
+    datos_sorted = datos.sort_values(by=['producto', 'usuarios.nombre_sucursal'])
+    for _, row in datos_sorted.iterrows():
+        pdf.cell(70, 10, str(row['producto']), 1)
+        pdf.cell(60, 10, str(row['usuarios.nombre_sucursal']), 1)
+        pdf.cell(30, 10, f"{float(row['cantidad']):.1f}", 1)
+        pdf.cell(30, 10, str(row['unidad_medida']), 1, ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
 # --- FUNCIONES DE MAESTRO DE PRODUCTOS ---
@@ -67,8 +81,7 @@ def reordenar_producto(prod_id, orden_actual, direccion, df_completo):
         target_index = orden_actual - 1
     elif direccion == "down" and orden_actual < len(df_completo) - 1:
         target_index = orden_actual + 1
-    else:
-        return
+    else: return
     idx_target = df_completo.index[df_completo['orden'] == target_index][0]
     target_id = df_completo.iloc[idx_target]['id']
     supabase.table("productos_lista").update({"orden": target_index}).eq("id", prod_id).execute()
@@ -125,12 +138,11 @@ else:
     if "cantidades" not in st.session_state: st.session_state.cantidades = {p: 0.0 for p in lista_prod_nombres}
     if "unidades_sel" not in st.session_state: st.session_state.unidades_sel = {p: "cajon/es" for p in lista_prod_nombres}
     if "extras" not in st.session_state: st.session_state.extras = []
-    if "reset_count" not in st.session_state: st.session_state.reset_count = 0
+    if "reset_count" not in st.session_state: st.session_count = 0
 
     menu = ["📝 Cargar Pedido", "📊 Pedido General", "📜 Historial de Compras", "👥 Usuarios", "📦 Listado de Productos"] if info["rol"] == "admin" else ["📝 Cargar", "📜 Historial"]
     tabs = st.tabs(menu)
 
-    # --- PESTAÑA 0: CARGA ---
     with tabs[0]:
         @st.fragment
         def render_items():
@@ -162,27 +174,38 @@ else:
                 st.rerun()
         render_items()
 
-    # --- SOLUCIÓN AL ERROR DE PESTAÑAS ---
     if info["rol"] == "admin":
         with tabs[1]:
+            # Traer datos incluyendo la relación con usuarios para el detalle
             res = supabase.table("pedidos").select("id, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)").eq("estado", "pendiente").execute()
             if res.data:
-                df_p = pd.json_normalize(res.data)
-                df_res = df_p.groupby(['producto', 'unidad_medida'])['cantidad'].sum().reset_index()
+                df_raw = pd.json_normalize(res.data)
+                
+                # Resumen para tabla y PDF de compra
+                df_res = df_raw.groupby(['producto', 'unidad_medida'])['cantidad'].sum().reset_index()
                 df_res = df_res.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values('orden')
                 df_res_final = df_res[['producto', 'unidad_medida', 'cantidad']].rename(columns={'producto': 'Producto', 'unidad_medida': 'Unidad', 'cantidad': 'Total'})
+                
                 st.dataframe(df_res_final.style.format({"Total": "{:.1f}"}), use_container_width=True, hide_index=True)
-                c_p1, c_p2 = st.columns(2)
-                with c_p1:
-                    pdf_c = generar_pdf("LISTA DE COMPRA", df_res_final)
-                    st.download_button("📄 PDF Compra", data=pdf_c, file_name="compra.pdf", type="primary", use_container_width=True)
-                with c_p2:
-                    if st.button("✅ COMPRA FINALIZADA", type="primary", use_container_width=True):
-                        for pid in df_p['id']: supabase.table("pedidos").update({"estado": "completado"}).eq("id", pid).execute()
-                        st.success("¡Listo!")
-                        st.rerun()
+                
+                # Fila de botones de descarga
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    pdf_compra = generar_pdf("LISTA DE COMPRA", df_res_final)
+                    st.download_button("📄 PDF Compra", data=pdf_compra, file_name="compra_general.pdf", type="primary", use_container_width=True)
+                with col_btn2:
+                    pdf_envio = generar_pdf_detallado("DETALLE DE ENVÍOS POR SUCURSAL", df_raw)
+                    st.download_button("🚚 PDF Envío (Detallado)", data=pdf_envio, file_name="detalle_envios.pdf", type="primary", use_container_width=True)
+                
+                st.write("") # Espacio
+                # Botón de Compra Finalizada debajo
+                if st.button("✅ COMPRA FINALIZADA", type="primary", use_container_width=True):
+                    for pid in df_raw['id']: supabase.table("pedidos").update({"estado": "completado"}).eq("id", pid).execute()
+                    st.success("¡Listo!")
+                    st.rerun()
             else: st.info("No hay pedidos pendientes.")
 
+        # Resto de pestañas para Admin (Historial, Usuarios, Catálogo) se mantienen igual...
         with tabs[2]:
             st.subheader("📜 Historial de Compras (General)")
             query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
@@ -258,7 +281,7 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
                         st.cache_data.clear(); st.rerun()
     else:
-        # Aquí el historial para la Sucursal (es su segunda pestaña, índice 1)
+        # Historial para Sucursal
         with tabs[1]:
             st.subheader("📜 Mi Historial de Pedidos")
             query = supabase.table("pedidos").select("fecha_pedido, producto, cantidad, unidad_medida, usuarios(nombre_sucursal)")
@@ -276,16 +299,3 @@ else:
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else:
                 st.info("Aún no has realizado pedidos.")
-
-
-
-
-
-
-
-
-
-
-
-
-
