@@ -13,15 +13,6 @@ supabase: Client = create_client(URL, KEY)
 # --- ELIMINAR ANCLAS DE LOS TÍTULOS ---
 st.markdown("""
     <style>
-    /* OCULTAR MENÚ SUPERIOR (Deploy, Stop, Fork, etc.) */
-    header[data-testid="stHeader"] {
-        visibility: hidden;
-        height: 0px;
-    }
-    /* Oculta el ícono de cadena/link al lado de los títulos */
-    .viewerBadge_link__1S137, .main .element-container a {
-        display: none;
-    }
     /* Específicamente para los headers de Streamlit */
     button[data-baseweb="tab"] > div > span > a, 
     h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
@@ -280,3 +271,4 @@ else:
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else:
                 st.info("Aún no has realizado pedidos.")
+
