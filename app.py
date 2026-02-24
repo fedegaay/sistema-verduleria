@@ -17,6 +17,11 @@ st.markdown("""
     .stToolbarActionButton {
         display: none;
     }
+
+    ._container_gzau3_1 {
+        display: none;
+    }
+    
     
     /* Específicamente para los headers de Streamlit */
     button[data-baseweb="tab"] > div > span > a, 
@@ -276,5 +281,6 @@ else:
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else:
                 st.info("Aún no has realizado pedidos.")
+
 
 
