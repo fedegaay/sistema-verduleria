@@ -18,7 +18,7 @@ st.markdown("""
         display: none;
     }
 
-    .st-emotion-cache-1dumvfu e1td4qo69 {
+    .st-emotion-cache-1dumvfu {
         display: none;
     }
     
@@ -281,6 +281,7 @@ else:
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else:
                 st.info("Aún no has realizado pedidos.")
+
 
 
 
