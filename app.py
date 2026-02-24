@@ -40,14 +40,14 @@ def generar_pdf(titulo, datos):
     pdf.cell(190, 10, titulo, ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(90, 14, "Producto", 1)
-    pdf.cell(40, 14, "Cant.", 1)
-    pdf.cell(60, 14, "Unidad", 1, ln=True)
+    pdf.cell(90, 8, "Producto", 1)
+    pdf.cell(40, 8, "Cant.", 1)
+    pdf.cell(60, 8, "Unidad", 1, ln=True)
     pdf.set_font("Arial", "", 12)
     for _, row in datos.iterrows():
-        pdf.cell(90, 14, str(row['Producto']), 1)
-        pdf.cell(40, 14, f"{float(row['Total']):.1f}", 1)
-        pdf.cell(60, 14, str(row['Unidad']), 1, ln=True)
+        pdf.cell(90, 8, str(row['Producto']), 1)
+        pdf.cell(40, 8, f"{float(row['Total']):.1f}", 1)
+        pdf.cell(60, 8, str(row['Unidad']), 1, ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
 def generar_pdf_detallado(titulo, datos):
@@ -63,15 +63,15 @@ def generar_pdf_detallado(titulo, datos):
         pdf.set_fill_color(240, 240, 240)
         pdf.cell(190, 12, f"SUCURSAL: {sucursal}", 1, ln=True, fill=True)
         pdf.set_font("Arial", "B", 10)
-        pdf.cell(100, 12, "Producto", 1)
-        pdf.cell(45, 12, "Cantidad", 1)
-        pdf.cell(45, 12, "Unidad", 1, ln=True)
+        pdf.cell(100, 8, "Producto", 1)
+        pdf.cell(45, 8, "Cantidad", 1)
+        pdf.cell(45, 8, "Unidad", 1, ln=True)
         pdf.set_font("Arial", "", 11)
         datos_sucursal = datos[datos['usuarios.nombre_sucursal'] == sucursal]
         for _, row in datos_sucursal.iterrows():
-            pdf.cell(100, 14, str(row['producto']), 1)
-            pdf.cell(45, 14, f"{float(row['cantidad']):.1f}", 1)
-            pdf.cell(45, 14, str(row['unidad_medida']), 1, ln=True)
+            pdf.cell(100, 8, str(row['producto']), 1)
+            pdf.cell(45, 8, f"{float(row['cantidad']):.1f}", 1)
+            pdf.cell(45, 8, str(row['unidad_medida']), 1, ln=True)
         pdf.ln(10)
     return pdf.output(dest='S').encode('latin-1')
 
@@ -297,3 +297,4 @@ else:
                         df_s = df_h[df_h['Rango'] == rango].copy()
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else: st.info("Aún no has realizado pedidos.")
+
