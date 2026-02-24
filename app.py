@@ -21,10 +21,16 @@ st.markdown("""
     /* OCULTAR PIE DE PÁGINA (Hecho con Streamlit / GitHub) */
     ._container_gzau3_1 {
         visibility: hidden;
+        bottom: -3000px;
+        right: -1500px;
+    }
+
+    ._terminalButton_rix23_138 {
         visibility: hidden;
         bottom: -3000px;
         right: -1500px;
     }
+    
     /* Oculta el ícono de cadena/link al lado de los títulos */
     .viewerBadge_link__1S137, .main .element-container a {
         display: none;
@@ -280,6 +286,7 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
 
 
