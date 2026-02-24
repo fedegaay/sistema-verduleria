@@ -152,7 +152,7 @@ else:
                 c_p1, c_p2 = st.columns(2)
                 with c_p1:
                     pdf_c = generar_pdf("LISTA DE COMPRA", df_res_final)
-                    st.download_button("📄 PDF Compra", data=pdf_c, file_name="compra.pdf")
+                    st.download_button("📄 PDF Compra", data=pdf_c, file_name="compra.pdf", type="primary")
                 with c_p2:
                     if st.button("✅ COMPRA FINALIZADA", type="primary", use_container_width=True):
                         for pid in df_p['id']: supabase.table("pedidos").update({"estado": "completado"}).eq("id", pid).execute()
@@ -249,4 +249,5 @@ else:
                         supabase.table("productos_lista").delete().eq("id", row['id']).execute()
 
                         st.cache_data.clear(); st.rerun()
+
 
