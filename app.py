@@ -98,7 +98,7 @@ def guardar_pedido(usuario_id, dict_pedidos, dict_unidades, lista_extras):
 check_session()
 
 if "user_info" not in st.session_state:
-    st.markdown("<h1 style='text-align: center;'>El Rey Verdu - Pedidos</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>El Rey Verdu <br>📦 Pedidos 📦 </h1>", unsafe_allow_html=True)
     with st.form("login"):
         u = st.text_input("Usuario")
         p = st.text_input("Clave", type="password")
@@ -276,6 +276,7 @@ else:
                         st.dataframe(df_s[['producto', 'cantidad', 'unidad_medida']], hide_index=True)
             else:
                 st.info("Aún no has realizado pedidos.")
+
 
 
 
