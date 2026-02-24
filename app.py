@@ -112,7 +112,7 @@ if "user_info" not in st.session_state:
 else:
     info = st.session_state["user_info"]
     c_suc, c_out = st.columns([0.7, 0.3])
-    with c_suc: st.markdown("<h1 style='text-align: center;'>"f"📍 {info['nombre_sucursal']}")"</h1>", unsafe_allow_html=True)
+    with c_suc: st.subheader(f"📍 {info['nombre_sucursal']}")
     with c_out:
         if st.button("Cerrar Sesion", type="primary", use_container_width=True):
             st.session_state.clear()
