@@ -245,8 +245,8 @@ def check_session():
 # ─────────────────────────────────────────────
 # PDFs
 # ─────────────────────────────────────────────
+# --- FUNCIONES PDF CORREGIDAS PARA EVITAR Invalid binary data format ---
 
-# --- FUNCIONES PDF ACTUALIZADAS (Compatibles con fpdf2) ---
 def generar_pdf(titulo, datos):
     pdf = FPDF()
     pdf.add_page()
@@ -263,8 +263,8 @@ def generar_pdf(titulo, datos):
         pdf.cell(40, 14, f"{float(r['Total']):.1f}", 1)
         pdf.cell(60, 14, normalizar_texto(r['Unidad']), 1, ln=True)
     
-    # IMPORTANTE: fpdf2 devuelve bytes directamente con .output()
-    return pdf.output()
+    # CORRECCIÓN: Forzamos la salida a bytes para que Streamlit la acepte
+    return bytes(pdf.output())
 
 def generar_pdf_detallado(titulo, df_raw):
     pdf = FPDF()
@@ -290,8 +290,8 @@ def generar_pdf_detallado(titulo, df_raw):
                 pdf.cell(45, 14, normalizar_texto(r['unidad_medida']), 1, ln=True)
             pdf.ln(10)
             
-    # IMPORTANTE: fpdf2 devuelve bytes directamente con .output()
-    return pdf.output()
+    # CORRECCIÓN: Forzamos la salida a bytes para evitar el error de Streamlit
+    return bytes(pdf.output())
 
 # ─────────────────────────────────────────────
 # GUARDAR PEDIDO
