@@ -1,4 +1,4 @@
 streamlit
 pandas
 supabase
-fpdf
+fpdf2

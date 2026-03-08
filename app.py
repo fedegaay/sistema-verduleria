@@ -246,40 +246,52 @@ def check_session():
 # PDFs
 # ─────────────────────────────────────────────
 
+# --- FUNCIONES PDF ACTUALIZADAS (Compatibles con fpdf2) ---
 def generar_pdf(titulo, datos):
-    pdf = FPDF(); pdf.add_page()
+    pdf = FPDF()
+    pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 10, normalizar_texto(titulo), ln=True, align="C"); pdf.ln(10)
+    pdf.cell(190, 10, normalizar_texto(titulo), ln=True, align="C")
+    pdf.ln(10)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(90, 8, "Producto", 1); pdf.cell(40, 8, "Cant.", 1); pdf.cell(60, 8, "Unidad", 1, ln=True)
+    pdf.cell(90, 14, "Producto", 1)
+    pdf.cell(40, 14, "Cant.", 1)
+    pdf.cell(60, 14, "Unidad", 1, ln=True)
     pdf.set_font("Arial", "", 12)
-    for _, row in datos.iterrows():
-        pdf.cell(90, 8, normalizar_texto(row['Producto']), 1)
-        pdf.cell(40, 8, f"{float(row['Total']):.1f}", 1)
-        pdf.cell(60, 8, normalizar_texto(row['Unidad']), 1, ln=True)
-    return bytes(pdf.output(dest='S'))
+    for _, r in datos.iterrows():
+        pdf.cell(90, 14, normalizar_texto(r['Producto']), 1)
+        pdf.cell(40, 14, f"{float(r['Total']):.1f}", 1)
+        pdf.cell(60, 14, normalizar_texto(r['Unidad']), 1, ln=True)
+    
+    # IMPORTANTE: fpdf2 devuelve bytes directamente con .output()
+    return pdf.output()
 
 def generar_pdf_detallado(titulo, df_raw):
-    pdf = FPDF(); pdf.add_page()
+    pdf = FPDF()
+    pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 10, normalizar_texto(titulo), ln=True, align="C"); pdf.ln(10)
+    pdf.cell(190, 10, normalizar_texto(titulo), ln=True, align="C")
+    pdf.ln(10)
     col_suc = 'usuarios.nombre_sucursal'
-    if col_suc not in df_raw.columns:
-        pdf.set_font("Arial", "", 12)
-        pdf.cell(190, 8, "Sin datos de sucursal.", ln=True)
-        return bytes(pdf.output(dest='S'))
-    for suc in df_raw[col_suc].dropna().unique():
-        pdf.set_font("Arial", "B", 14); pdf.set_fill_color(240, 240, 240)
-        pdf.cell(190, 12, f"SUCURSAL: {normalizar_texto(str(suc))}", 1, ln=True, fill=True)
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(100, 8, "Producto", 1); pdf.cell(45, 8, "Cantidad", 1); pdf.cell(45, 8, "Unidad", 1, ln=True)
-        pdf.set_font("Arial", "", 11)
-        for _, row in df_raw[df_raw[col_suc] == suc].iterrows():
-            pdf.cell(100, 8, normalizar_texto(str(row.get('producto', ''))), 1)
-            pdf.cell(45, 8, f"{float(row.get('cantidad', 0)):.1f}", 1)
-            pdf.cell(45, 8, normalizar_texto(str(row.get('unidad_medida', ''))), 1, ln=True)
-        pdf.ln(8)
-    return bytes(pdf.output(dest='S'))
+    if col_suc in df_raw.columns:
+        for s in df_raw[col_suc].dropna().unique():
+            pdf.set_font("Arial", "B", 14)
+            pdf.set_fill_color(240, 240, 240)
+            pdf.cell(190, 12, f"SUCURSAL: {normalizar_texto(str(s))}", 1, ln=True, fill=True)
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(100, 14, "Producto", 1)
+            pdf.cell(45, 14, "Cantidad", 1)
+            pdf.cell(45, 14, "Unidad", 1, ln=True)
+            d_suc = df_raw[df_raw[col_suc] == s]
+            pdf.set_font("Arial", "", 11)
+            for _, r in d_suc.iterrows():
+                pdf.cell(100, 14, normalizar_texto(r['producto']), 1)
+                pdf.cell(45, 14, f"{float(r['cantidad']):.1f}", 1)
+                pdf.cell(45, 14, normalizar_texto(r['unidad_medida']), 1, ln=True)
+            pdf.ln(10)
+            
+    # IMPORTANTE: fpdf2 devuelve bytes directamente con .output()
+    return pdf.output()
 
 # ─────────────────────────────────────────────
 # GUARDAR PEDIDO
