@@ -2,7 +2,6 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import time
-import json
 from datetime import timedelta, datetime
 from fpdf import FPDF
 import unicodedata
@@ -17,74 +16,95 @@ supabase: Client = create_client(URL, KEY)
 
 st.set_page_config(page_title="El Rey Verdu", layout="centered")
 
-# CSS global — fuerza columnas en línea en móvil y estilo general
 st.markdown("""
 <style>
-/* Ocultar decoraciones de Streamlit */
+/* Ocultar decoraciones */
 .stToolbarActionButton { display: none !important; }
 h1 a, h2 a, h3 a, h4 a { display: none !important; }
 [data-testid="stHeader"] { background: transparent !important; }
 footer { display: none !important; }
 
-/* ── Forzar columnas en línea (no apilar) en móvil ── */
+/* Reducir padding general de la página */
+[data-testid="stAppViewContainer"] > section > div {
+    padding-top: 0.5rem !important;
+}
+.block-container {
+    padding-top: 0.5rem !important;
+    padding-bottom: 1rem !important;
+}
+
+/* Columnas: nunca apilar, siempre en línea */
 [data-testid="stHorizontalBlock"] {
     flex-wrap: nowrap !important;
     align-items: center !important;
-    gap: 4px !important;
+    gap: 3px !important;
 }
 [data-testid="column"] {
     min-width: 0 !important;
     padding: 0 2px !important;
 }
 
-/* ── Botones compactos en móvil ── */
-@media (max-width: 640px) {
-    .stButton > button {
-        padding: 6px 4px !important;
-        font-size: 12px !important;
-    }
-    /* data_editor más compacto */
-    [data-testid="stDataFrameResizable"] {
-        font-size: 13px !important;
-    }
+/* Botones pequeños y compactos siempre */
+.stButton > button {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    min-height: 0 !important;
+    white-space: nowrap !important;
 }
 
-/* ── Cabeceras de tabla ── */
+/* Tabs más compactos */
+.stTabs [data-baseweb="tab"] {
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+}
+
+/* Reducir espacio entre elementos */
+.stMarkdown { margin-bottom: 0 !important; }
+[data-testid="stVerticalBlock"] > div { gap: 0.3rem !important; }
+
+/* Cabecera verde de tablas */
 .tbl-header {
     display: flex;
     background: #2e7d32;
     color: white;
-    border-radius: 7px;
-    padding: 8px 6px;
+    border-radius: 6px;
+    padding: 6px 6px;
     font-weight: 700;
-    font-size: 13px;
+    font-size: 12px;
     margin-bottom: 2px;
-    gap: 4px;
+    gap: 3px;
     align-items: center;
 }
-.th { text-align: center; }
-.th-left { text-align: left; }
+.th       { text-align: center; flex-shrink: 0; }
+.th-left  { text-align: left; }
 
-/* ── Separador de filas ── */
-.row-sep { border: none; border-top: 1px solid #eee; margin: 2px 0; }
+/* Separador de filas */
+.row-sep { border: none; border-top: 1px solid #eee; margin: 1px 0; }
 
-/* ── Texto nombre en filas ── */
+/* Nombre en filas */
 .nombre-txt {
-    font-size: 13px;
-    font-weight: 600;
-    padding-top: 5px;
-    line-height: 1.3;
+    font-size: 13px; font-weight: 600;
+    padding-top: 3px; line-height: 1.3;
     word-break: break-word;
 }
-.sub-txt {
-    font-size: 11px;
-    color: #888;
-    line-height: 1.2;
-}
+.sub-txt { font-size: 11px; color: #888; line-height: 1.2; }
 
-/* ── Éxito y warning custom ── */
-.ok-box  { background:#e8f5e9; color:#2e7d32; border-radius:8px; padding:10px; font-weight:700; text-align:center; margin:6px 0; }
-.warn-box { background:#fff3e0; color:#e65100; border-radius:8px; padding:10px; font-weight:600; text-align:center; margin:6px 0; }
+/* Header sucursal compacto */
+.suc-header {
+    background: #f1f8e9;
+    border-left: 4px solid #2e7d32;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+}
+.suc-nombre { font-size: 15px; font-weight: 700; color: #1b5e20; margin: 0; }
+.suc-salir  {
+    font-size: 12px; color: #888; cursor: pointer;
+    margin-top: 2px; display: inline-block;
+    background: none; border: none; padding: 0;
+    text-decoration: underline;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -120,11 +140,6 @@ def obtener_maestro_productos():
     return pd.DataFrame(res.data)
 
 def check_session():
-    """
-    Sesión persistente: el user_id vive en st.query_params.
-    Al refrescar la página Streamlit Cloud mantiene los query_params en la URL,
-    así que la sesión sobrevive F5 y reruns.
-    """
     if "user_info" in st.session_state:
         return
     u_id = st.query_params.get("uid", "")
@@ -177,44 +192,35 @@ def generar_pdf_detallado(titulo, df_raw):
 # ─────────────────────────────────────────────
 
 def guardar_pedido(usuario_id, df_editor, extras):
-    """
-    df_editor: DataFrame editado por st.data_editor (productos del maestro)
-    extras: lista de dicts con productos adicionales
-    """
     batch = []
-
-    # Productos del maestro con cantidad > 0
     for _, row in df_editor.iterrows():
         cant = validar_cantidad(row.get('Cantidad', 0))
         if cant > 0:
             batch.append({
-                "usuario_id":   usuario_id,
-                "producto":     str(row['Producto']),
-                "cantidad":     cant,
+                "usuario_id":    usuario_id,
+                "producto":      str(row['Producto']),
+                "cantidad":      cant,
                 "unidad_medida": str(row['Unidad']),
-                "estado":       "pendiente"
+                "estado":        "pendiente"
             })
-
-    # Productos adicionales
     for ex in extras:
         cant   = validar_cantidad(ex.get('cant', 0))
         nombre = str(ex.get('nombre', '')).strip()
         if nombre and cant > 0:
             batch.append({
-                "usuario_id":   usuario_id,
-                "producto":     nombre,
-                "cantidad":     cant,
+                "usuario_id":    usuario_id,
+                "producto":      nombre,
+                "cantidad":      cant,
                 "unidad_medida": ex.get('unidad', 'cajon/es'),
-                "estado":       "pendiente"
+                "estado":        "pendiente"
             })
-
     if batch:
         supabase.table("pedidos").insert(batch).execute()
         return True
     return False
 
 # ─────────────────────────────────────────────
-# REORDENAR PRODUCTOS
+# REORDENAR
 # ─────────────────────────────────────────────
 
 def reordenar(pid, orden_actual, direccion, df):
@@ -229,28 +235,20 @@ def reordenar(pid, orden_actual, direccion, df):
         st.cache_data.clear()
 
 # ─────────────────────────────────────────────
-# RENDER: TABLA DE PEDIDO
+# RENDER: PEDIDO
 # ─────────────────────────────────────────────
 
 def render_pedido(usuario_id, lista_productos):
-    """
-    Usa st.data_editor para la tabla principal.
-    Extras se cargan con widgets nativos en session_state.
-    """
-    # Inicializar extras en session_state
     if "extras" not in st.session_state:
         st.session_state.extras = []
 
-    # Construir DataFrame base
     df_base = pd.DataFrame({
         "Producto": lista_productos,
         "Cantidad": [0.0] * len(lista_productos),
         "Unidad":   [UNIDADES[0]] * len(lista_productos),
     })
 
-    st.markdown("#### 🛒 Productos del catálogo")
-    st.caption("Completá la cantidad de lo que necesitás. Dejá en 0 lo que no pedís.")
-
+    st.caption("Completá la cantidad. Dejá en 0 lo que no pedís.")
     df_edit = st.data_editor(
         df_base,
         use_container_width=True,
@@ -265,9 +263,8 @@ def render_pedido(usuario_id, lista_productos):
     )
 
     st.divider()
-    st.markdown("#### ✨ Productos adicionales")
+    st.markdown("**✨ Productos adicionales**")
 
-    # Mostrar extras existentes
     extras_actuales = []
     for i, ex in enumerate(st.session_state.extras):
         c1, c2, c3, c4 = st.columns([4, 2, 3, 1], gap="small")
@@ -285,60 +282,58 @@ def render_pedido(usuario_id, lista_productos):
                                 index=UNIDADES.index(ex.get('unidad', UNIDADES[0])),
                                 key=f"ex_unid_{i}", label_visibility="collapsed")
         with c4:
-            if st.button("🗑️", key=f"ex_del_{i}", help="Eliminar"):
+            if st.button("🗑️", key=f"ex_del_{i}"):
                 st.session_state.extras.pop(i)
                 st.rerun()
         extras_actuales.append({'nombre': nom, 'cant': cant, 'unidad': unid})
-
     st.session_state.extras = extras_actuales
 
-    if st.button("➕ Agregar producto adicional", use_container_width=True):
+    if st.button("➕ Agregar adicional", use_container_width=True):
         st.session_state.extras.append({'nombre': '', 'cant': 0.0, 'unidad': UNIDADES[0]})
         st.rerun()
 
     st.divider()
-
     if st.button("🚀 ENVIAR PEDIDO", type="primary", use_container_width=True):
         if guardar_pedido(usuario_id, df_edit, st.session_state.extras):
             st.session_state.extras = []
-            st.success("✅ ¡Pedido registrado correctamente!")
+            st.success("✅ ¡Pedido registrado!")
             time.sleep(1.5)
             st.rerun()
         else:
-            st.warning("⚠️ No hay productos con cantidad mayor a 0.")
+            st.warning("⚠️ No hay cantidades mayores a 0.")
 
 # ─────────────────────────────────────────────
 # RENDER: CATÁLOGO
 # ─────────────────────────────────────────────
 
 def render_catalogo(df_maestro):
-    # Cabecera
     st.markdown("""
     <div class="tbl-header">
-      <div style="flex:6" class="th-left">Producto</div>
-      <div style="flex:1" class="th">↑</div>
-      <div style="flex:1" class="th">↓</div>
-      <div style="flex:2" class="th">Borrar</div>
+      <div style="flex:7" class="th-left">Producto</div>
+      <div style="width:32px" class="th">↑</div>
+      <div style="width:32px" class="th">↓</div>
+      <div style="width:40px" class="th">🗑️</div>
     </div>""", unsafe_allow_html=True)
 
     for _, row in df_maestro.iterrows():
         pid   = str(row['id'])
         orden = int(row['orden'])
-        c1, c2, c3, c4 = st.columns([6, 1, 1, 2], gap="small")
+        # Proporciones: nombre ocupa el espacio, 3 botones son fijos y angostos
+        c1, c2, c3, c4 = st.columns([7, 1, 1, 1], gap="small")
         with c1:
             st.markdown(f"<div class='nombre-txt'>{row['nombre']}</div>",
                         unsafe_allow_html=True)
         with c2:
-            if st.button("🔼", key=f"up_{pid}", use_container_width=True):
+            if st.button("↑", key=f"up_{pid}", use_container_width=True):
                 reordenar(pid, orden, "up", df_maestro)
                 st.rerun()
         with c3:
-            if st.button("🔽", key=f"dn_{pid}", use_container_width=True):
+            if st.button("↓", key=f"dn_{pid}", use_container_width=True):
                 reordenar(pid, orden, "down", df_maestro)
                 st.rerun()
         with c4:
-            if st.button("🗑️", key=f"del_{pid}", use_container_width=True,
-                         help="Borrar producto"):
+            if st.button("✕", key=f"del_{pid}", use_container_width=True,
+                         type="primary"):
                 supabase.table("productos_lista").delete().eq("id", pid).execute()
                 st.cache_data.clear()
                 st.rerun()
@@ -349,12 +344,11 @@ def render_catalogo(df_maestro):
 # ─────────────────────────────────────────────
 
 def render_usuarios(usuarios):
-    # Cabecera
     st.markdown("""
     <div class="tbl-header">
       <div style="flex:6" class="th-left">Sucursal / Login</div>
-      <div style="flex:2" class="th">Editar</div>
-      <div style="flex:2" class="th">Borrar</div>
+      <div style="width:42px" class="th">✏️</div>
+      <div style="width:42px" class="th">🗑️</div>
     </div>""", unsafe_allow_html=True)
 
     for user in usuarios:
@@ -363,7 +357,7 @@ def render_usuarios(usuarios):
         login  = user['username']
         es_adm = user['rol'] == 'admin'
 
-        c1, c2, c3 = st.columns([6, 2, 2], gap="small")
+        c1, c2, c3 = st.columns([6, 1, 1], gap="small")
         with c1:
             st.markdown(
                 f"<div class='nombre-txt'>{nombre}</div>"
@@ -371,29 +365,26 @@ def render_usuarios(usuarios):
                 unsafe_allow_html=True)
         with c2:
             if st.button("✏️", key=f"ed_{uid}", use_container_width=True):
-                key = f"show_edit_{uid}"
-                st.session_state[key] = not st.session_state.get(key, False)
+                k = f"show_edit_{uid}"
+                st.session_state[k] = not st.session_state.get(k, False)
                 st.rerun()
         with c3:
             if not es_adm:
-                if st.button("🗑️", key=f"du_{uid}", use_container_width=True,
+                if st.button("✕", key=f"du_{uid}", use_container_width=True,
                              type="primary"):
                     supabase.table("usuarios").delete().eq("id", uid).execute()
                     st.rerun()
 
-        # Panel edición desplegable
         if st.session_state.get(f"show_edit_{uid}", False):
             with st.form(f"fedit_{uid}"):
                 ed_u = st.text_input("Login",           value=login)
-                ed_p = st.text_input("Nueva clave",     type="password",
-                                     placeholder="Vacío = no cambiar")
+                ed_p = st.text_input("Nueva clave (vacío = no cambiar)", type="password")
                 ed_s = st.text_input("Nombre Sucursal", value=nombre)
                 ok, cancel = st.columns(2)
                 with ok:
                     if st.form_submit_button("💾 Guardar", type="primary",
                                             use_container_width=True):
-                        upd = {"username": ed_u.strip(),
-                               "nombre_sucursal": ed_s.strip()}
+                        upd = {"username": ed_u.strip(), "nombre_sucursal": ed_s.strip()}
                         if ed_p.strip():
                             upd["password"] = hashear_password(ed_p)
                         supabase.table("usuarios").update(upd).eq("id", uid).execute()
@@ -415,7 +406,7 @@ check_session()
 
 # ── LOGIN ────────────────────────────────────
 if "user_info" not in st.session_state:
-    st.markdown("<h2 style='text-align:center;margin-bottom:20px'>📍 El Rey Verdu<br>Pedidos</h2>",
+    st.markdown("<h2 style='text-align:center;margin-bottom:16px'>📍 El Rey Verdu<br><small>Pedidos</small></h2>",
                 unsafe_allow_html=True)
     with st.form("login"):
         u = st.text_input("Usuario")
@@ -429,7 +420,6 @@ if "user_info" not in st.session_state:
                               .eq("username", u).eq("password", p).execute()
             if res.data:
                 st.session_state["user_info"] = res.data[0]
-                # Guardar uid en URL para persistir sesión al refrescar
                 st.query_params["uid"] = res.data[0]["id"]
                 st.rerun()
             else:
@@ -441,18 +431,23 @@ else:
     es_admin = info["rol"] == "admin"
     uid      = info["id"]
 
-    # Asegurar que uid siempre esté en la URL
+    # Asegurar uid en URL
     if st.query_params.get("uid", "") != uid:
         st.query_params["uid"] = uid
 
-    c_suc, c_out = st.columns([0.72, 0.28])
-    with c_suc:
-        st.markdown(f"### 📍 {info['nombre_sucursal']}")
-    with c_out:
-        if st.button("Salir", use_container_width=True):
-            st.session_state.clear()
-            st.query_params.clear()
-            st.rerun()
+    # ── Header compacto: nombre arriba, botón salir abajo ──
+    st.markdown(
+        f"""<div class="suc-header">
+          <div class="suc-nombre">📍 {info['nombre_sucursal']}</div>
+        </div>""",
+        unsafe_allow_html=True
+    )
+    if st.button("🚪 Cerrar sesión", use_container_width=False):
+        st.session_state.clear()
+        st.query_params.clear()
+        st.rerun()
+
+    st.divider()
 
     df_maestro         = obtener_maestro_productos()
     lista_prod_nombres = df_maestro['nombre'].tolist()
@@ -464,7 +459,7 @@ else:
     )
     tabs = st.tabs(menu)
 
-    # ── TAB 0: CARGAR PEDIDO ────────────────────
+    # ── TAB 0: PEDIDO ───────────────────────────
     with tabs[0]:
         render_pedido(uid, lista_prod_nombres)
 
@@ -483,8 +478,7 @@ else:
                 df_res = df_res.merge(df_maestro, left_on='producto',
                                       right_on='nombre', how='left').sort_values('orden')
                 df_final = df_res[['producto', 'unidad_medida', 'cantidad']].rename(
-                    columns={'producto': 'Producto', 'unidad_medida': 'Unidad',
-                             'cantidad': 'Total'})
+                    columns={'producto': 'Producto', 'unidad_medida': 'Unidad', 'cantidad': 'Total'})
 
                 st.dataframe(df_final.style.format({"Total": "{:.1f}"}),
                              use_container_width=True, hide_index=True)
@@ -514,10 +508,8 @@ else:
                     st.warning("⚠️ ¿Estás seguro? Esto marcará todos los pedidos como completados.")
                     col_si, col_no = st.columns(2)
                     with col_si:
-                        if st.button("✅ Sí, limpiar", type="primary",
-                                     use_container_width=True):
-                            supabase.table("pedidos") \
-                                .update({"estado": "completado"}) \
+                        if st.button("✅ Sí, limpiar", type="primary", use_container_width=True):
+                            supabase.table("pedidos").update({"estado": "completado"}) \
                                 .in_("id", df_raw['id'].tolist()).execute()
                             st.session_state.confirmar_limpieza = False
                             st.success("Limpieza completada.")
@@ -550,7 +542,6 @@ else:
                             st.rerun()
                         else:
                             st.warning("Completá todos los campos.")
-
             res_u = supabase.table("usuarios").select("*").execute()
             render_usuarios(res_u.data)
 
@@ -606,10 +597,10 @@ else:
                     st.dataframe(
                         df_s[cols].rename(columns={
                             'usuarios.nombre_sucursal': 'Sucursal',
-                            'producto':     'Producto',
-                            'cantidad':     'Cant.',
-                            'unidad_medida':'Unidad',
-                            'estado':       'Estado'
+                            'producto':      'Producto',
+                            'cantidad':      'Cant.',
+                            'unidad_medida': 'Unidad',
+                            'estado':        'Estado'
                         }),
                         hide_index=True, use_container_width=True
                     )
