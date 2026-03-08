@@ -7,7 +7,6 @@ from datetime import timedelta, datetime
 from fpdf import FPDF
 import unicodedata
 import hashlib
-import streamlit.components.v1 as components
 
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN
@@ -16,76 +15,80 @@ URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-st.set_page_config(page_title="El Rey Verdu - Pedidos", layout="centered")
+st.set_page_config(page_title="El Rey Verdu", layout="centered")
 
+# CSS global — fuerza columnas en línea en móvil y estilo general
 st.markdown("""
 <style>
-.stToolbarActionButton { display: none; }
-h1 a, h2 a, h3 a, h4 a, h5 a, h6 a { display: none !important; }
-[data-testid="stHeader"] { background: rgba(0,0,0,0); }
+/* Ocultar decoraciones de Streamlit */
+.stToolbarActionButton { display: none !important; }
+h1 a, h2 a, h3 a, h4 a { display: none !important; }
+[data-testid="stHeader"] { background: transparent !important; }
+footer { display: none !important; }
+
+/* ── Forzar columnas en línea (no apilar) en móvil ── */
+[data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 4px !important;
+}
+[data-testid="column"] {
+    min-width: 0 !important;
+    padding: 0 2px !important;
+}
+
+/* ── Botones compactos en móvil ── */
+@media (max-width: 640px) {
+    .stButton > button {
+        padding: 6px 4px !important;
+        font-size: 12px !important;
+    }
+    /* data_editor más compacto */
+    [data-testid="stDataFrameResizable"] {
+        font-size: 13px !important;
+    }
+}
+
+/* ── Cabeceras de tabla ── */
+.tbl-header {
+    display: flex;
+    background: #2e7d32;
+    color: white;
+    border-radius: 7px;
+    padding: 8px 6px;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 2px;
+    gap: 4px;
+    align-items: center;
+}
+.th { text-align: center; }
+.th-left { text-align: left; }
+
+/* ── Separador de filas ── */
+.row-sep { border: none; border-top: 1px solid #eee; margin: 2px 0; }
+
+/* ── Texto nombre en filas ── */
+.nombre-txt {
+    font-size: 13px;
+    font-weight: 600;
+    padding-top: 5px;
+    line-height: 1.3;
+    word-break: break-word;
+}
+.sub-txt {
+    font-size: 11px;
+    color: #888;
+    line-height: 1.2;
+}
+
+/* ── Éxito y warning custom ── */
+.ok-box  { background:#e8f5e9; color:#2e7d32; border-radius:8px; padding:10px; font-weight:700; text-align:center; margin:6px 0; }
+.warn-box { background:#fff3e0; color:#e65100; border-radius:8px; padding:10px; font-weight:600; text-align:center; margin:6px 0; }
 </style>
 """, unsafe_allow_html=True)
 
 UNIDADES = ["cajon/es", "bolsa/s", "unidad/es"]
-
-CSS_BASE = """
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-body { background: transparent; padding: 0 2px; }
-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-thead tr { background: #2e7d32; color: white; }
-thead th { padding: 9px 4px; font-size: 13px; font-weight: 700; text-align: center; }
-thead th:first-child { text-align: left; padding-left: 10px; border-radius: 7px 0 0 7px; }
-thead th:last-child  { border-radius: 0 7px 7px 0; }
-tbody tr { border-bottom: 1px solid #f0f0f0; }
-tbody tr:last-child  { border-bottom: none; }
-tbody tr:hover       { background: #f9fbe7; }
-td { padding: 5px 3px; vertical-align: middle; font-size: 14px; }
-td:first-child { padding-left: 8px; font-weight: 600; line-height: 1.3; word-break: break-word; }
-.inp-sel, .inp-txt, .inp-num {
-    width: 100%; padding: 6px 4px; font-size: 12px;
-    border: 1px solid #ccc; border-radius: 7px; background: white;
-}
-.inp-num { text-align: center; }
-.inp-sel:focus, .inp-txt:focus, .inp-num:focus { outline: 2px solid #2e7d32; border-color: #2e7d32; }
-.btn { width: 100%; padding: 7px 4px; border: none; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap; }
-.btn-del  { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
-.btn-del:hover  { background: #ffcdd2; }
-.btn-edit { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
-.btn-edit:hover { background: #bbdefb; }
-.btn-save { background: #2e7d32; color: white; padding: 9px; font-size: 14px; width: 100%; border-radius: 7px; border: none; cursor: pointer; margin-top: 8px; }
-.btn-save:hover { background: #1b5e20; }
-.btn-cancel { background: #f5f5f5; color: #555; padding: 9px; font-size: 14px; width: 100%; border-radius: 7px; border: 1px solid #ccc; cursor: pointer; margin-top: 4px; }
-.btn-add { background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 7px; padding: 8px 12px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; color: #2e7d32; font-weight: 600; }
-.btn-add:hover { background: #c8e6c9; }
-.btn-enviar { width: 100%; padding: 14px; background: #2e7d32; color: white; font-size: 16px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; margin-top: 12px; letter-spacing: 0.5px; }
-.btn-enviar:active { background: #1b5e20; }
-.edit-form { background: #f9fbe7; border: 1px solid #c5e1a5; border-radius: 8px; padding: 12px; margin: 4px 0 8px 0; }
-.edit-form label { font-size: 12px; color: #555; margin-bottom: 2px; display: block; }
-.edit-form input { width: 100%; padding: 7px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; margin-bottom: 8px; }
-.edit-form input:focus { outline: 2px solid #2e7d32; }
-.msg-ok   { color: #2e7d32; font-weight:700; text-align:center; padding:10px; background:#e8f5e9; border-radius:7px; margin-top:8px; }
-.msg-warn { color: #e65100; font-weight:600; text-align:center; padding:10px; background:#fff3e0; border-radius:7px; margin-top:8px; }
-.divider  { border: none; border-top: 1px solid #ddd; margin: 12px 0; }
-.section-title { font-size: 14px; font-weight: 700; color: #333; margin: 12px 0 6px 0; }
-.hint { font-size: 11px; color: #888; text-align: center; margin-top: 6px; }
-.extra-row { display: grid; grid-template-columns: 38fr 18fr 30fr 10fr; gap: 4px; align-items: center; margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid #f0f0f0; }
-</style>
-"""
-
-# ─────────────────────────────────────────────
-# JS helper: navega la URL del padre preservando user_id
-# Se embebe en cada iframe que necesite comunicarse con Streamlit
-# ─────────────────────────────────────────────
-JS_NAV = """
-function navegar(params) {
-  // Tomamos la URL actual del padre y le agregamos/pisamos los params que nos pasan
-  const url = new URL(window.parent.location.href);
-  // Siempre preservamos user_id si existe
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  window.parent.location.href = url.toString();
-}
-"""
 
 # ─────────────────────────────────────────────
 # SOPORTE
@@ -117,10 +120,14 @@ def obtener_maestro_productos():
     return pd.DataFrame(res.data)
 
 def check_session():
-    """Restaura sesión desde query_param user_id (persiste entre reruns y F5)."""
+    """
+    Sesión persistente: el user_id vive en st.query_params.
+    Al refrescar la página Streamlit Cloud mantiene los query_params en la URL,
+    así que la sesión sobrevive F5 y reruns.
+    """
     if "user_info" in st.session_state:
         return
-    u_id = st.query_params.get("user_id", "")
+    u_id = st.query_params.get("uid", "")
     if u_id and len(u_id) == 36:
         try:
             res = supabase.table("usuarios").select("*").eq("id", u_id).execute()
@@ -128,84 +135,6 @@ def check_session():
                 st.session_state["user_info"] = res.data[0]
         except Exception:
             pass
-
-def limpiar_accion():
-    """Elimina los query_params de acción pero conserva user_id."""
-    uid = st.query_params.get("user_id", "")
-    st.query_params.clear()
-    if uid:
-        st.query_params["user_id"] = uid
-
-# ─────────────────────────────────────────────
-# PROCESAR ACCIONES QUE LLEGAN POR QUERY PARAMS
-# Esto se ejecuta AL INICIO de cada rerun, antes de renderizar nada.
-# El iframe navega la URL del padre con ?accion=xxx, Streamlit detecta
-# el cambio de query_params, hace rerun, y acá procesamos la acción.
-# ─────────────────────────────────────────────
-
-def procesar_accion():
-    accion = st.query_params.get("accion", "")
-    if not accion:
-        return
-
-    # ── Pedido ──────────────────────────────────────────────────────
-    if accion == "pedido_guardar":
-        uid   = st.query_params.get("user_id", "")
-        items_raw = st.query_params.get("items", "")
-        if uid and items_raw:
-            try:
-                items = json.loads(items_raw)
-                guardar_pedido(uid, items)
-                st.session_state["pedido_ok"] = True
-            except Exception:
-                pass
-        limpiar_accion()
-        st.rerun()
-
-    # ── Catálogo: borrar ────────────────────────────────────────────
-    elif accion == "cat_del":
-        pid = st.query_params.get("pid", "")
-        if pid:
-            supabase.table("productos_lista").delete().eq("id", pid).execute()
-            st.cache_data.clear()
-        limpiar_accion()
-        st.rerun()
-
-    # ── Catálogo: reordenar (drag & drop) ───────────────────────────
-    elif accion == "cat_reorder":
-        ids_raw = st.query_params.get("ids", "")
-        if ids_raw:
-            try:
-                ids = json.loads(ids_raw)
-                for nuevo_orden, pid in enumerate(ids):
-                    supabase.table("productos_lista").update({"orden": nuevo_orden}).eq("id", pid).execute()
-                st.cache_data.clear()
-            except Exception:
-                pass
-        limpiar_accion()
-        st.rerun()
-
-    # ── Usuarios: borrar ────────────────────────────────────────────
-    elif accion == "usr_del":
-        uid = st.query_params.get("uid", "")
-        if uid:
-            supabase.table("usuarios").delete().eq("id", uid).execute()
-        limpiar_accion()
-        st.rerun()
-
-    # ── Usuarios: editar ────────────────────────────────────────────
-    elif accion == "usr_edit":
-        uid      = st.query_params.get("uid", "")
-        username = st.query_params.get("uname", "")
-        nombre   = st.query_params.get("nsuc", "")
-        pwd      = st.query_params.get("pwd", "")
-        if uid and username and nombre:
-            upd = {"username": username, "nombre_sucursal": nombre}
-            if pwd:
-                upd["password"] = hashear_password(pwd)
-            supabase.table("usuarios").update(upd).eq("id", uid).execute()
-        limpiar_accion()
-        st.rerun()
 
 # ─────────────────────────────────────────────
 # PDFs
@@ -247,316 +176,264 @@ def generar_pdf_detallado(titulo, df_raw):
 # GUARDAR PEDIDO
 # ─────────────────────────────────────────────
 
-def guardar_pedido(usuario_id, items):
+def guardar_pedido(usuario_id, df_editor, extras):
+    """
+    df_editor: DataFrame editado por st.data_editor (productos del maestro)
+    extras: lista de dicts con productos adicionales
+    """
     batch = []
-    for it in items:
-        cant   = validar_cantidad(it.get('cantidad', 0))
-        nombre = str(it.get('producto', '')).strip()
+
+    # Productos del maestro con cantidad > 0
+    for _, row in df_editor.iterrows():
+        cant = validar_cantidad(row.get('Cantidad', 0))
+        if cant > 0:
+            batch.append({
+                "usuario_id":   usuario_id,
+                "producto":     str(row['Producto']),
+                "cantidad":     cant,
+                "unidad_medida": str(row['Unidad']),
+                "estado":       "pendiente"
+            })
+
+    # Productos adicionales
+    for ex in extras:
+        cant   = validar_cantidad(ex.get('cant', 0))
+        nombre = str(ex.get('nombre', '')).strip()
         if nombre and cant > 0:
             batch.append({
-                "usuario_id": usuario_id, "producto": nombre,
-                "cantidad": cant, "unidad_medida": it.get('unidad_medida', 'cajon/es'),
-                "estado": "pendiente"
+                "usuario_id":   usuario_id,
+                "producto":     nombre,
+                "cantidad":     cant,
+                "unidad_medida": ex.get('unidad', 'cajon/es'),
+                "estado":       "pendiente"
             })
+
     if batch:
         supabase.table("pedidos").insert(batch).execute()
         return True
     return False
 
 # ─────────────────────────────────────────────
-# HTML: TABLA DE PEDIDO
+# REORDENAR PRODUCTOS
 # ─────────────────────────────────────────────
 
-def html_tabla_pedido(productos, usuario_id):
-    filas = ""
-    for prod in productos:
-        pid  = prod.replace(" ", "_").replace("/", "_")
-        opts = "".join(f'<option value="{u}">{u}</option>' for u in UNIDADES)
-        filas += f"""
-        <tr>
-          <td style="width:42%">{prod}</td>
-          <td style="width:33%">
-            <select name="unidad_{pid}" class="inp-sel">{opts}</select>
-          </td>
-          <td style="width:25%">
-            <input type="number" name="cant_{pid}" class="inp-num"
-                   placeholder="0" min="0" step="0.5" inputmode="decimal">
-          </td>
-        </tr>"""
-
-    return CSS_BASE + f"""
-<table>
-  <thead><tr>
-    <th style="width:42%; text-align:left; padding-left:10px">Producto</th>
-    <th style="width:33%">Unidad</th>
-    <th style="width:25%">Cant.</th>
-  </tr></thead>
-  <tbody>{filas}</tbody>
-</table>
-<hr class="divider">
-<div class="section-title">✨ Productos Adicionales</div>
-<div id="extras-wrap"></div>
-<button class="btn-add" onclick="agregarExtra()">➕ Añadir producto adicional</button>
-<hr class="divider">
-<div id="msg"></div>
-<button class="btn-enviar" onclick="enviar()">🚀 ENVIAR PEDIDO</button>
-<div class="hint">Campos en 0 o vacíos no se envían</div>
-
-<script>
-const UNIDADES   = {json.dumps(UNIDADES)};
-const PRODUCTOS  = {json.dumps(productos)};
-const USUARIO_ID = "{usuario_id}";
-let extraCount   = 0;
-
-function optsUnidad() {{
-  return UNIDADES.map(u => `<option value="${{u}}">${{u}}</option>`).join('');
-}}
-function agregarExtra() {{
-  const id = extraCount++;
-  const div = document.createElement('div');
-  div.className = 'extra-row'; div.id = 'ex_' + id;
-  div.innerHTML = `
-    <input class="inp-txt" type="text"   name="ex_nom_${{id}}"  placeholder="Producto"/>
-    <input class="inp-num" type="number" name="ex_cant_${{id}}" placeholder="0" min="0" step="0.5" inputmode="decimal"/>
-    <select class="inp-sel" name="ex_unid_${{id}}">${{optsUnidad()}}</select>
-    <button class="btn btn-del" type="button" onclick="document.getElementById('ex_${{id}}').remove()">🗑️</button>
-  `;
-  document.getElementById('extras-wrap').appendChild(div);
-}}
-function enviar() {{
-  const items = [];
-  for (const prod of PRODUCTOS) {{
-    const pid = prod.replaceAll(' ','_').replaceAll('/','_');
-    const cEl = document.querySelector('[name="cant_'+pid+'"]');
-    const uEl = document.querySelector('[name="unidad_'+pid+'"]');
-    if (!cEl) continue;
-    const c = parseFloat(cEl.value);
-    if (!isNaN(c) && c > 0)
-      items.push({{ producto: prod, cantidad: Math.round(c*2)/2, unidad_medida: uEl?.value||'cajon/es' }});
-  }}
-  document.querySelectorAll('[id^="ex_"]').forEach(row => {{
-    const id   = row.id.replace('ex_','');
-    const nom  = (row.querySelector('[name="ex_nom_'+id+'"]')?.value||'').trim();
-    const c    = parseFloat(row.querySelector('[name="ex_cant_'+id+'"]')?.value||'');
-    const unid = row.querySelector('[name="ex_unid_'+id+'"]')?.value||'cajon/es';
-    if (nom && !isNaN(c) && c > 0)
-      items.push({{ producto: nom, cantidad: Math.round(c*2)/2, unidad_medida: unid }});
-  }});
-  if (items.length === 0) {{
-    document.getElementById('msg').innerHTML = '<div class="msg-warn">⚠️ No hay cantidades mayores a 0.</div>';
-    return;
-  }}
-  document.getElementById('msg').innerHTML = '<div class="msg-ok">✅ Enviando...</div>';
-  const url = new URL(window.parent.location.href);
-  url.searchParams.set('accion', 'pedido_guardar');
-  url.searchParams.set('user_id', USUARIO_ID);
-  url.searchParams.set('items', JSON.stringify(items));
-  window.parent.location.href = url.toString();
-}}
-</script>
-"""
+def reordenar(pid, orden_actual, direccion, df):
+    target = orden_actual - 1 if direccion == "up" else orden_actual + 1
+    if target < 0 or target >= len(df):
+        return
+    vecino = supabase.table("productos_lista").select("id").eq("orden", target).execute()
+    if vecino.data:
+        vid = vecino.data[0]['id']
+        supabase.table("productos_lista").update({"orden": target}).eq("id", pid).execute()
+        supabase.table("productos_lista").update({"orden": orden_actual}).eq("id", vid).execute()
+        st.cache_data.clear()
 
 # ─────────────────────────────────────────────
-# HTML: CATÁLOGO CON DRAG & DROP
+# RENDER: TABLA DE PEDIDO
 # ─────────────────────────────────────────────
 
-def html_tabla_catalogo(productos_df, usuario_id):
-    items_html = ""
-    for row in productos_df.to_dict('records'):
-        nombre = row['nombre']
-        rid    = str(row['id'])
-        items_html += f"""
-        <li class="cat-item" data-id="{rid}">
-          <span class="drag-handle">☰</span>
-          <span class="cat-nombre">{nombre}</span>
-          <button class="btn btn-del btn-borrar" onclick="borrar('{rid}')">Borrar</button>
-        </li>"""
+def render_pedido(usuario_id, lista_productos):
+    """
+    Usa st.data_editor para la tabla principal.
+    Extras se cargan con widgets nativos en session_state.
+    """
+    # Inicializar extras en session_state
+    if "extras" not in st.session_state:
+        st.session_state.extras = []
 
-    return CSS_BASE + f"""
-<style>
-.cat-list {{ list-style:none; padding:0; margin:0; }}
-.cat-item {{
-    display:flex; align-items:center; gap:8px;
-    padding:10px 8px; border-bottom:1px solid #f0f0f0; background:white;
-}}
-.cat-item:last-child {{ border-bottom:none; }}
-.cat-item.sortable-ghost  {{ background:#e8f5e9; opacity:0.7; }}
-.cat-item.sortable-chosen {{ background:#f9fbe7; box-shadow:0 2px 8px rgba(0,0,0,0.12); }}
-.drag-handle {{
-    color:#aaa; font-size:18px; cursor:grab;
-    padding:0 4px; flex-shrink:0; user-select:none; touch-action:none;
-}}
-.drag-handle:active {{ cursor:grabbing; }}
-.cat-nombre {{ flex:1; font-weight:600; font-size:14px; word-break:break-word; }}
-.btn-borrar {{ flex-shrink:0; width:auto; padding:6px 10px; font-size:12px; }}
-.cat-header {{
-    display:flex; align-items:center; gap:8px;
-    background:#2e7d32; color:white; border-radius:7px;
-    padding:8px; font-weight:700; font-size:13px; margin-bottom:4px;
-}}
-.cat-header .h-handle {{ width:26px; flex-shrink:0; }}
-.cat-header .h-nombre  {{ flex:1; }}
-.cat-header .h-accion  {{ width:60px; text-align:center; flex-shrink:0; }}
-.hint-drag {{ font-size:11px; color:#888; text-align:center; margin:6px 0 4px 0; }}
-.msg-guardando {{ color:#2e7d32; font-weight:700; text-align:center; padding:8px; background:#e8f5e9; border-radius:7px; margin-top:6px; font-size:13px; }}
-</style>
+    # Construir DataFrame base
+    df_base = pd.DataFrame({
+        "Producto": lista_productos,
+        "Cantidad": [0.0] * len(lista_productos),
+        "Unidad":   [UNIDADES[0]] * len(lista_productos),
+    })
 
-<div class="cat-header">
-  <div class="h-handle"></div>
-  <div class="h-nombre">Producto</div>
-  <div class="h-accion">Acción</div>
-</div>
-<div class="hint-drag">☰ Arrastrá para reordenar · el orden se guarda al soltar</div>
-<ul class="cat-list" id="cat-list">
-{items_html}
-</ul>
-<div id="msg"></div>
+    st.markdown("#### 🛒 Productos del catálogo")
+    st.caption("Completá la cantidad de lo que necesitás. Dejá en 0 lo que no pedís.")
 
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-<script>
-const USUARIO_ID = "{usuario_id}";
+    df_edit = st.data_editor(
+        df_base,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        column_config={
+            "Producto": st.column_config.TextColumn("Producto", disabled=True, width="medium"),
+            "Cantidad": st.column_config.NumberColumn("Cant.", min_value=0, step=0.5, format="%.1f", width="small"),
+            "Unidad":   st.column_config.SelectboxColumn("Unidad", options=UNIDADES, width="medium"),
+        },
+        key="data_editor_pedido"
+    )
 
-Sortable.create(document.getElementById('cat-list'), {{
-  handle: '.drag-handle',
-  animation: 150,
-  ghostClass: 'sortable-ghost',
-  chosenClass: 'sortable-chosen',
-  onEnd: function() {{
-    const ids = [...document.querySelectorAll('.cat-item')].map(el => el.dataset.id);
-    document.getElementById('msg').innerHTML = '<div class="msg-guardando">💾 Guardando orden...</div>';
-    const url = new URL(window.parent.location.href);
-    url.searchParams.set('accion',  'cat_reorder');
-    url.searchParams.set('user_id', USUARIO_ID);
-    url.searchParams.set('ids',     JSON.stringify(ids));
-    window.parent.location.href = url.toString();
-  }}
-}});
+    st.divider()
+    st.markdown("#### ✨ Productos adicionales")
 
-function borrar(id) {{
-  if (!confirm('¿Borrar este producto del catálogo?')) return;
-  const url = new URL(window.parent.location.href);
-  url.searchParams.set('accion',  'cat_del');
-  url.searchParams.set('user_id', USUARIO_ID);
-  url.searchParams.set('pid',     id);
-  window.parent.location.href = url.toString();
-}}
-</script>
-"""
+    # Mostrar extras existentes
+    extras_actuales = []
+    for i, ex in enumerate(st.session_state.extras):
+        c1, c2, c3, c4 = st.columns([4, 2, 3, 1], gap="small")
+        with c1:
+            nom = st.text_input("Producto", value=ex.get('nombre', ''),
+                                key=f"ex_nom_{i}", label_visibility="collapsed",
+                                placeholder="Nombre")
+        with c2:
+            cant = st.number_input("Cant", value=float(ex.get('cant', 0)),
+                                   min_value=0.0, step=0.5,
+                                   key=f"ex_cant_{i}", label_visibility="collapsed",
+                                   format="%.1f")
+        with c3:
+            unid = st.selectbox("Unidad", UNIDADES,
+                                index=UNIDADES.index(ex.get('unidad', UNIDADES[0])),
+                                key=f"ex_unid_{i}", label_visibility="collapsed")
+        with c4:
+            if st.button("🗑️", key=f"ex_del_{i}", help="Eliminar"):
+                st.session_state.extras.pop(i)
+                st.rerun()
+        extras_actuales.append({'nombre': nom, 'cant': cant, 'unidad': unid})
+
+    st.session_state.extras = extras_actuales
+
+    if st.button("➕ Agregar producto adicional", use_container_width=True):
+        st.session_state.extras.append({'nombre': '', 'cant': 0.0, 'unidad': UNIDADES[0]})
+        st.rerun()
+
+    st.divider()
+
+    if st.button("🚀 ENVIAR PEDIDO", type="primary", use_container_width=True):
+        if guardar_pedido(usuario_id, df_edit, st.session_state.extras):
+            st.session_state.extras = []
+            st.success("✅ ¡Pedido registrado correctamente!")
+            time.sleep(1.5)
+            st.rerun()
+        else:
+            st.warning("⚠️ No hay productos con cantidad mayor a 0.")
 
 # ─────────────────────────────────────────────
-# HTML: TABLA USUARIOS
+# RENDER: CATÁLOGO
 # ─────────────────────────────────────────────
 
-def html_tabla_usuarios(usuarios, usuario_id):
-    filas = ""
-    for u in usuarios:
-        uid    = str(u['id'])
-        nombre = u['nombre_sucursal']
-        login  = u['username']
-        es_adm = u['rol'] == 'admin'
-        btn_del = ("" if es_adm else
-                   f'<button class="btn btn-del" onclick="borrarUser(\'{uid}\')">🗑️ Borrar</button>')
-        # Escapamos comillas simples en nombre/login para no romper el JS
-        nombre_js = nombre.replace("'", "\\'")
-        login_js  = login.replace("'", "\\'")
-        filas += f"""
-        <tr>
-          <td style="width:52%">
-            <span style="font-weight:700">{nombre}</span><br>
-            <span style="font-size:11px; color:#888">{login}</span>
-          </td>
-          <td style="width:24%; text-align:center">
-            <button class="btn btn-edit" onclick="mostrarEdit('{uid}')">✏️ Editar</button>
-          </td>
-          <td style="width:24%; text-align:center">{btn_del}</td>
-        </tr>
-        <tr id="edit_{uid}" style="display:none">
-          <td colspan="3">
-            <div class="edit-form">
-              <label>Login</label>
-              <input id="ed_u_{uid}" value="{login}" placeholder="Usuario">
-              <label>Nueva clave <span style="color:#aaa">(vacío = no cambiar)</span></label>
-              <input id="ed_p_{uid}" type="password" placeholder="••••••">
-              <label>Nombre Sucursal</label>
-              <input id="ed_s_{uid}" value="{nombre}" placeholder="Sucursal">
-              <button class="btn-save"   onclick="guardarEdit('{uid}')">💾 Guardar</button>
-              <button class="btn-cancel" onclick="ocultarEdit('{uid}')">Cancelar</button>
-            </div>
-          </td>
-        </tr>"""
+def render_catalogo(df_maestro):
+    # Cabecera
+    st.markdown("""
+    <div class="tbl-header">
+      <div style="flex:6" class="th-left">Producto</div>
+      <div style="flex:1" class="th">↑</div>
+      <div style="flex:1" class="th">↓</div>
+      <div style="flex:2" class="th">Borrar</div>
+    </div>""", unsafe_allow_html=True)
 
-    return CSS_BASE + f"""
-<table>
-  <thead><tr>
-    <th style="width:52%; text-align:left; padding-left:10px">Sucursal / Usuario</th>
-    <th style="width:24%">Editar</th>
-    <th style="width:24%">Acción</th>
-  </tr></thead>
-  <tbody>{filas}</tbody>
-</table>
-<div id="msg"></div>
-<script>
-const USUARIO_ID = "{usuario_id}";
+    for _, row in df_maestro.iterrows():
+        pid   = str(row['id'])
+        orden = int(row['orden'])
+        c1, c2, c3, c4 = st.columns([6, 1, 1, 2], gap="small")
+        with c1:
+            st.markdown(f"<div class='nombre-txt'>{row['nombre']}</div>",
+                        unsafe_allow_html=True)
+        with c2:
+            if st.button("🔼", key=f"up_{pid}", use_container_width=True):
+                reordenar(pid, orden, "up", df_maestro)
+                st.rerun()
+        with c3:
+            if st.button("🔽", key=f"dn_{pid}", use_container_width=True):
+                reordenar(pid, orden, "down", df_maestro)
+                st.rerun()
+        with c4:
+            if st.button("🗑️", key=f"del_{pid}", use_container_width=True,
+                         help="Borrar producto"):
+                supabase.table("productos_lista").delete().eq("id", pid).execute()
+                st.cache_data.clear()
+                st.rerun()
+        st.markdown("<hr class='row-sep'>", unsafe_allow_html=True)
 
-function mostrarEdit(uid) {{ document.getElementById('edit_' + uid).style.display = ''; }}
-function ocultarEdit(uid) {{ document.getElementById('edit_' + uid).style.display = 'none'; }}
+# ─────────────────────────────────────────────
+# RENDER: USUARIOS
+# ─────────────────────────────────────────────
 
-function guardarEdit(uid) {{
-  const u = document.getElementById('ed_u_' + uid).value.trim();
-  const p = document.getElementById('ed_p_' + uid).value.trim();
-  const s = document.getElementById('ed_s_' + uid).value.trim();
-  if (!u || !s) {{ alert('Login y nombre son obligatorios.'); return; }}
-  document.getElementById('msg').innerHTML = '<div class="msg-ok" style="font-size:12px">Guardando...</div>';
-  const url = new URL(window.parent.location.href);
-  url.searchParams.set('accion',  'usr_edit');
-  url.searchParams.set('user_id', USUARIO_ID);
-  url.searchParams.set('uid',     uid);
-  url.searchParams.set('uname',   u);
-  url.searchParams.set('nsuc',    s);
-  url.searchParams.set('pwd',     p);
-  window.parent.location.href = url.toString();
-}}
+def render_usuarios(usuarios):
+    # Cabecera
+    st.markdown("""
+    <div class="tbl-header">
+      <div style="flex:6" class="th-left">Sucursal / Login</div>
+      <div style="flex:2" class="th">Editar</div>
+      <div style="flex:2" class="th">Borrar</div>
+    </div>""", unsafe_allow_html=True)
 
-function borrarUser(uid) {{
-  if (!confirm('¿Eliminar este usuario?')) return;
-  const url = new URL(window.parent.location.href);
-  url.searchParams.set('accion',  'usr_del');
-  url.searchParams.set('user_id', USUARIO_ID);
-  url.searchParams.set('uid',     uid);
-  window.parent.location.href = url.toString();
-}}
-</script>
-"""
+    for user in usuarios:
+        uid    = str(user['id'])
+        nombre = user['nombre_sucursal']
+        login  = user['username']
+        es_adm = user['rol'] == 'admin'
+
+        c1, c2, c3 = st.columns([6, 2, 2], gap="small")
+        with c1:
+            st.markdown(
+                f"<div class='nombre-txt'>{nombre}</div>"
+                f"<div class='sub-txt'>{login}</div>",
+                unsafe_allow_html=True)
+        with c2:
+            if st.button("✏️", key=f"ed_{uid}", use_container_width=True):
+                key = f"show_edit_{uid}"
+                st.session_state[key] = not st.session_state.get(key, False)
+                st.rerun()
+        with c3:
+            if not es_adm:
+                if st.button("🗑️", key=f"du_{uid}", use_container_width=True,
+                             type="primary"):
+                    supabase.table("usuarios").delete().eq("id", uid).execute()
+                    st.rerun()
+
+        # Panel edición desplegable
+        if st.session_state.get(f"show_edit_{uid}", False):
+            with st.form(f"fedit_{uid}"):
+                ed_u = st.text_input("Login",           value=login)
+                ed_p = st.text_input("Nueva clave",     type="password",
+                                     placeholder="Vacío = no cambiar")
+                ed_s = st.text_input("Nombre Sucursal", value=nombre)
+                ok, cancel = st.columns(2)
+                with ok:
+                    if st.form_submit_button("💾 Guardar", type="primary",
+                                            use_container_width=True):
+                        upd = {"username": ed_u.strip(),
+                               "nombre_sucursal": ed_s.strip()}
+                        if ed_p.strip():
+                            upd["password"] = hashear_password(ed_p)
+                        supabase.table("usuarios").update(upd).eq("id", uid).execute()
+                        st.session_state[f"show_edit_{uid}"] = False
+                        st.success("Usuario actualizado.")
+                        st.rerun()
+                with cancel:
+                    if st.form_submit_button("Cancelar", use_container_width=True):
+                        st.session_state[f"show_edit_{uid}"] = False
+                        st.rerun()
+
+        st.markdown("<hr class='row-sep'>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # APP PRINCIPAL
 # ─────────────────────────────────────────────
 
-# 1. Procesar cualquier acción pendiente en la URL (ANTES de todo)
-procesar_accion()
-
-# 2. Restaurar sesión desde user_id en URL
 check_session()
 
 # ── LOGIN ────────────────────────────────────
 if "user_info" not in st.session_state:
-    st.markdown("<h1 style='text-align:center'>📍 El Rey Verdu 📍<br>Pedidos</h1>",
+    st.markdown("<h2 style='text-align:center;margin-bottom:20px'>📍 El Rey Verdu<br>Pedidos</h2>",
                 unsafe_allow_html=True)
     with st.form("login"):
         u = st.text_input("Usuario")
         p = st.text_input("Clave", type="password")
         if st.form_submit_button("Iniciar Sesión", type="primary", use_container_width=True):
             p_hash = hashear_password(p)
-            res = supabase.table("usuarios").select("*").eq("username", u).eq("password", p_hash).execute()
+            res = supabase.table("usuarios").select("*") \
+                          .eq("username", u).eq("password", p_hash).execute()
             if not res.data:
-                # Fallback para claves en texto plano (usuarios viejos)
-                res = supabase.table("usuarios").select("*").eq("username", u).eq("password", p).execute()
+                res = supabase.table("usuarios").select("*") \
+                              .eq("username", u).eq("password", p).execute()
             if res.data:
                 st.session_state["user_info"] = res.data[0]
-                st.query_params["user_id"] = res.data[0]["id"]
+                # Guardar uid en URL para persistir sesión al refrescar
+                st.query_params["uid"] = res.data[0]["id"]
                 st.rerun()
             else:
-                st.error("Acceso denegado. Verificá usuario y clave.")
+                st.error("Acceso denegado.")
 
 # ── APP ──────────────────────────────────────
 else:
@@ -564,15 +441,15 @@ else:
     es_admin = info["rol"] == "admin"
     uid      = info["id"]
 
-    # Mostrar mensaje de pedido enviado si corresponde
-    if st.session_state.pop("pedido_ok", False):
-        st.success("¡Pedido registrado correctamente!")
+    # Asegurar que uid siempre esté en la URL
+    if st.query_params.get("uid", "") != uid:
+        st.query_params["uid"] = uid
 
-    c_suc, c_out = st.columns([0.7, 0.3])
+    c_suc, c_out = st.columns([0.72, 0.28])
     with c_suc:
         st.markdown(f"### 📍 {info['nombre_sucursal']}")
     with c_out:
-        if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
+        if st.button("Salir", use_container_width=True):
             st.session_state.clear()
             st.query_params.clear()
             st.rerun()
@@ -581,18 +458,15 @@ else:
     lista_prod_nombres = df_maestro['nombre'].tolist()
 
     menu = (
-        ["📝 Cargar Pedido", "📊 Pedido General", "📜 Historial", "👥 Usuarios", "📦 Catálogo"]
-        if es_admin else ["📝 Cargar", "📜 Historial"]
+        ["📝 Pedido", "📊 General", "📜 Historial", "👥 Usuarios", "📦 Catálogo"]
+        if es_admin else
+        ["📝 Pedido", "📜 Historial"]
     )
     tabs = st.tabs(menu)
 
     # ── TAB 0: CARGAR PEDIDO ────────────────────
     with tabs[0]:
-        altura = max(420, len(lista_prod_nombres) * 50 + 280)
-        components.html(
-            html_tabla_pedido(lista_prod_nombres, uid),
-            height=altura, scrolling=False
-        )
+        render_pedido(uid, lista_prod_nombres)
 
     if es_admin:
 
@@ -603,13 +477,16 @@ else:
                 .eq("estado", "pendiente").execute()
 
             if res.data:
-                df_raw   = pd.json_normalize(res.data)
-                df_res   = df_raw.groupby(['producto','unidad_medida'])['cantidad'].sum().reset_index()
-                df_res   = df_res.merge(df_maestro, left_on='producto', right_on='nombre', how='left').sort_values('orden')
-                df_final = df_res[['producto','unidad_medida','cantidad']].rename(
-                    columns={'producto':'Producto','unidad_medida':'Unidad','cantidad':'Total'})
+                df_raw = pd.json_normalize(res.data)
+                df_res = df_raw.groupby(['producto', 'unidad_medida'])['cantidad'] \
+                               .sum().reset_index()
+                df_res = df_res.merge(df_maestro, left_on='producto',
+                                      right_on='nombre', how='left').sort_values('orden')
+                df_final = df_res[['producto', 'unidad_medida', 'cantidad']].rename(
+                    columns={'producto': 'Producto', 'unidad_medida': 'Unidad',
+                             'cantidad': 'Total'})
 
-                st.dataframe(df_final.style.format({"Total":"{:.1f}"}),
+                st.dataframe(df_final.style.format({"Total": "{:.1f}"}),
                              use_container_width=True, hide_index=True)
 
                 c_p1, c_p2 = st.columns(2)
@@ -629,15 +506,18 @@ else:
                     st.session_state.confirmar_limpieza = False
 
                 if not st.session_state.confirmar_limpieza:
-                    if st.button("✅ FINALIZAR Y LIMPIAR DÍA", type="primary", use_container_width=True):
+                    if st.button("✅ FINALIZAR Y LIMPIAR DÍA", type="primary",
+                                 use_container_width=True):
                         st.session_state.confirmar_limpieza = True
                         st.rerun()
                 else:
                     st.warning("⚠️ ¿Estás seguro? Esto marcará todos los pedidos como completados.")
                     col_si, col_no = st.columns(2)
                     with col_si:
-                        if st.button("✅ Sí, limpiar", type="primary", use_container_width=True):
-                            supabase.table("pedidos").update({"estado":"completado"}) \
+                        if st.button("✅ Sí, limpiar", type="primary",
+                                     use_container_width=True):
+                            supabase.table("pedidos") \
+                                .update({"estado": "completado"}) \
                                 .in_("id", df_raw['id'].tolist()).execute()
                             st.session_state.confirmar_limpieza = False
                             st.success("Limpieza completada.")
@@ -652,36 +532,34 @@ else:
 
         # ── TAB 3: USUARIOS ─────────────────────
         with tabs[3]:
-            st.subheader("👥 Gestión de Usuarios")
+            st.subheader("👥 Usuarios")
             with st.expander("➕ Nueva Sucursal"):
                 with st.form("ns"):
                     nu     = st.text_input("Usuario")
                     np_raw = st.text_input("Clave")
-                    ns     = st.text_input("Nombre Sucursal")
-                    if st.form_submit_button("Crear Cuenta", type="primary"):
-                        if nu and np_raw and ns:
+                    ns_txt = st.text_input("Nombre Sucursal")
+                    if st.form_submit_button("Crear", type="primary"):
+                        if nu and np_raw and ns_txt:
                             supabase.table("usuarios").insert({
-                                "username": nu, "password": hashear_password(np_raw),
-                                "nombre_sucursal": ns, "rol": "sucursal"
+                                "username":        nu,
+                                "password":        hashear_password(np_raw),
+                                "nombre_sucursal": ns_txt,
+                                "rol":             "sucursal"
                             }).execute()
-                            st.success(f"Sucursal '{ns}' creada.")
+                            st.success(f"Sucursal '{ns_txt}' creada.")
                             st.rerun()
                         else:
                             st.warning("Completá todos los campos.")
 
-            res_u    = supabase.table("usuarios").select("*").execute()
-            altura_u = max(200, len(res_u.data) * 80 + 60)
-            components.html(
-                html_tabla_usuarios(res_u.data, uid),
-                height=altura_u, scrolling=False
-            )
+            res_u = supabase.table("usuarios").select("*").execute()
+            render_usuarios(res_u.data)
 
         # ── TAB 4: CATÁLOGO ─────────────────────
         with tabs[4]:
-            st.subheader("📦 Catálogo de Productos")
+            st.subheader("📦 Catálogo")
             with st.form("np"):
-                n_p = st.text_input("Nombre de nuevo producto")
-                if st.form_submit_button("Añadir al Catálogo", type="primary"):
+                n_p = st.text_input("Nuevo producto")
+                if st.form_submit_button("Añadir", type="primary"):
                     if n_p.strip():
                         supabase.table("productos_lista").insert({
                             "nombre": n_p.strip().capitalize(),
@@ -691,17 +569,13 @@ else:
                         st.rerun()
                     else:
                         st.warning("Ingresá un nombre válido.")
-
-            altura_cat = max(300, len(df_maestro) * 52 + 100)
-            components.html(
-                html_tabla_catalogo(df_maestro, uid),
-                height=altura_cat, scrolling=False
-            )
+            st.divider()
+            render_catalogo(df_maestro)
 
     # ── TAB HISTORIAL ───────────────────────────
     hist_idx = 2 if es_admin else 1
     with tabs[hist_idx]:
-        st.subheader("📜 Historial de Pedidos")
+        st.subheader("📜 Historial")
         query = supabase.table("pedidos").select(
             "fecha_pedido, producto, cantidad, unidad_medida, estado, usuarios(nombre_sucursal)"
         )
@@ -723,18 +597,21 @@ else:
                 with st.expander(f"📅 {rango}"):
                     df_s = df_h[df_h['Rango'] == rango].copy()
                     cols = (
-                        ['usuarios.nombre_sucursal','producto','cantidad','unidad_medida','estado']
+                        ['usuarios.nombre_sucursal', 'producto', 'cantidad',
+                         'unidad_medida', 'estado']
                         if es_admin else
-                        ['producto','cantidad','unidad_medida','estado']
+                        ['producto', 'cantidad', 'unidad_medida', 'estado']
                     )
                     cols = [c for c in cols if c in df_s.columns]
                     st.dataframe(
                         df_s[cols].rename(columns={
-                            'usuarios.nombre_sucursal':'Sucursal',
-                            'producto':'Producto','cantidad':'Cant.',
-                            'unidad_medida':'Unidad','estado':'Estado'
+                            'usuarios.nombre_sucursal': 'Sucursal',
+                            'producto':     'Producto',
+                            'cantidad':     'Cant.',
+                            'unidad_medida':'Unidad',
+                            'estado':       'Estado'
                         }),
                         hide_index=True, use_container_width=True
                     )
         else:
-            st.info("No hay historial registrado.")
+            st.info("No hay historial.")
